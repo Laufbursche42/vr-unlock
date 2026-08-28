@@ -8,7 +8,7 @@
 
 'use strict';
 
-const BUILD = 'v6';   // logged on load so a tester's log reveals which deployed build is running
+const BUILD = 'v7';   // logged on load so a tester's log reveals which deployed build is running
 
 // --------------------------- hex helpers ---------------------------
 
@@ -127,6 +127,13 @@ function openHelp(key) {
   if (dlg.showModal) { try { dlg.showModal(); } catch (e) { dlg.setAttribute('open', ''); } } else dlg.setAttribute('open', '');
 }
 function closeHelp() { const dlg = $('help'); if (!dlg) return; if (dlg.close) dlg.close(); else dlg.removeAttribute('open'); }
+// Open the help dialog with arbitrary title/body (used by the per-setting "?" icons).
+function openHelpText(title, body) {
+  const dlg = $('help'); if (!dlg) return;
+  const ti = $('help-title'); if (ti) ti.textContent = title;
+  const bo = $('help-body'); if (bo) bo.textContent = body;
+  if (dlg.showModal) { try { dlg.showModal(); } catch (e) { dlg.setAttribute('open', ''); } } else dlg.setAttribute('open', '');
+}
 
 function clearLog() {
   logLines.length = 0;
@@ -311,50 +318,81 @@ function cmdRaw(hexStr) {
 // 'value' number + write.
 const FRAME_FN = { cmd: frameWriteCmd, cmd2: frameWriteCmd2, hb: frameWriteHB };
 const SETTINGS = [
-  { grp: { de: 'Sicherheit', en: 'Security' }, kind: 'lockpair', de: 'Wegfahrsperre (Diebstahlschutz)', en: 'Immobilizer (anti-theft)', unlock: 0x70, lock: 0x71, frame: 'cmd' },
-  { grp: { de: 'Sicherheit', en: 'Security' }, kind: 'toggle', de: 'Elektronische Sperre', en: 'Electronic lock', reg: 0xf6, frame: 'hb' },
-  { grp: { de: 'Fahren', en: 'Riding' }, kind: 'bit', de: 'Nullstart (LQD)', en: 'Zero-start (LQD)', base: 0x7d, mask: 0x0001, frame: 'hb' },
-  { grp: { de: 'Fahren', en: 'Riding' }, kind: 'value', de: 'Motortyp', en: 'Motor type', reg: 0x6e, frame: 'cmd2' },
-  { grp: { de: 'Fahren', en: 'Riding' }, kind: 'value', de: 'Akkukapazität', en: 'Battery capacity', reg: 0x21, frame: 'hb' },
-  { grp: { de: 'Licht und Warnungen', en: 'Light and warnings' }, kind: 'toggle', de: 'Scheinwerfer', en: 'Headlight', reg: 0xf2, frame: 'hb' },
-  { grp: { de: 'Licht und Warnungen', en: 'Light and warnings' }, kind: 'bit', de: 'Nabenlicht', en: 'Hub light', base: 0xd3, mask: 0x20, frame: 'cmd2' },
-  { grp: { de: 'Licht und Warnungen', en: 'Light and warnings' }, kind: 'bit', de: 'Rückwärts-zu-schnell-Warnung', en: 'Reverse-too-fast warning', base: 0xd3, mask: 0x10, frame: 'cmd2' },
-  { grp: { de: 'Licht und Warnungen', en: 'Light and warnings' }, kind: 'bit', de: 'Sperr-Warnung', en: 'Lock warning', base: 0xd3, mask: 0x08, frame: 'cmd2' },
-  { grp: { de: 'Licht und Warnungen', en: 'Light and warnings' }, kind: 'bit', de: 'Sperre schaltet ab', en: 'Lock shut-down', base: 0xd3, mask: 0x04, frame: 'cmd2' },
-  { grp: { de: 'Skalen', en: 'Scales' }, kind: 'value', de: 'Lenkskala (0..100)', en: 'Turn scale (0..100)', reg: 0xa1, frame: 'cmd2' },
-  { grp: { de: 'Skalen', en: 'Scales' }, kind: 'value', de: 'Fahrskala (0..100)', en: 'Ride scale (0..100)', reg: 0xa2, frame: 'cmd2' },
+  { grp: { de: 'Sicherheit', en: 'Security' }, kind: 'lockpair', de: 'Wegfahrsperre (Diebstahlschutz)', en: 'Immobilizer (anti-theft)', unlock: 0x70, lock: 0x71, frame: 'cmd',
+    hde: 'Der Diebstahlschutz. Sperren blockiert das Anfahren, Entsperren gibt den Scooter wieder frei. Das hat nichts mit dem Tempo zu tun.', hen: 'The anti-theft lock. Lock blocks moving off, Unlock releases the scooter again. This has nothing to do with speed.' },
+  { grp: { de: 'Sicherheit', en: 'Security' }, kind: 'toggle', de: 'Elektronische Sperre', en: 'Electronic lock', reg: 0xf6, frame: 'hb',
+    hde: 'Eine zusätzliche elektronische Sperre, die manche Modelle haben. An blockiert, Aus gibt frei.', hen: 'An extra electronic lock some models have. On blocks, Off releases.' },
+  { grp: { de: 'Fahren', en: 'Riding' }, kind: 'bit', de: 'Nullstart', en: 'Zero-start', base: 0x7d, mask: 0x0001, frame: 'hb',
+    hde: 'An: der Motor zieht erst ab Schritttempo an, du musst kurz anschieben (gesetzlich vorgeschrieben). Aus: der Motor zieht aus dem Stand an.', hen: 'On: the motor only engages above walking pace, you have to kick off first (legally required). Off: the motor pulls from standstill.' },
+  { grp: { de: 'Fahren', en: 'Riding' }, kind: 'value', de: 'Motortyp', en: 'Motor type', reg: 0x6e, frame: 'cmd2',
+    hde: 'Interner Motortyp-Index. Nur ändern, wenn du genau weißt, welchen Motor dein Scooter hat. Ein falscher Wert kann die Fahrt stören.', hen: 'Internal motor-type index. Only change it if you know exactly which motor your scooter has. A wrong value can disturb the ride.' },
+  { grp: { de: 'Fahren', en: 'Riding' }, kind: 'value', de: 'Akkukapazität', en: 'Battery capacity', reg: 0x21, frame: 'hb',
+    hde: 'Die im Scooter hinterlegte Akkugröße. Sie beeinflusst die Reichweiten- und Prozentanzeige, nicht die echte Kapazität des Akkus.', hen: 'The battery size stored in the scooter. It affects the range and percentage display, not the real capacity of the battery.' },
+  { grp: { de: 'Licht und Warnungen', en: 'Light and warnings' }, kind: 'toggle', de: 'Scheinwerfer', en: 'Headlight', reg: 0xf2, frame: 'hb',
+    hde: 'Das Frontlicht an- oder ausschalten.', hen: 'Turn the front light on or off.' },
+  { grp: { de: 'Licht und Warnungen', en: 'Light and warnings' }, kind: 'bit', de: 'Nabenlicht', en: 'Hub light', base: 0xd3, mask: 0x20, frame: 'cmd2',
+    hde: 'Das Zusatzlicht an der Nabe oder am Trittbrett an- oder ausschalten.', hen: 'Turn the extra light at the hub or deck on or off.' },
+  { grp: { de: 'Licht und Warnungen', en: 'Light and warnings' }, kind: 'bit', de: 'Rückwärts-zu-schnell-Warnung', en: 'Reverse-too-fast warning', base: 0xd3, mask: 0x10, frame: 'cmd2',
+    hde: 'Warnt, wenn der Scooter zu schnell rückwärts rollt. An schaltet die Warnung ein.', hen: 'Warns when the scooter rolls backwards too fast. On enables the warning.' },
+  { grp: { de: 'Licht und Warnungen', en: 'Light and warnings' }, kind: 'bit', de: 'Sperr-Warnung', en: 'Lock warning', base: 0xd3, mask: 0x08, frame: 'cmd2',
+    hde: 'Gibt eine Warnung aus, wenn jemand den gesperrten Scooter bewegt.', hen: 'Gives a warning when someone moves the locked scooter.' },
+  { grp: { de: 'Licht und Warnungen', en: 'Light and warnings' }, kind: 'bit', de: 'Sperre schaltet ab', en: 'Lock shut-down', base: 0xd3, mask: 0x04, frame: 'cmd2',
+    hde: 'Wenn die Sperre aktiv ist, schaltet der Antrieb ganz ab statt nur zu bremsen.', hen: 'When the lock is active, the drive shuts down completely instead of only braking.' },
+  { grp: { de: 'Feineinstellung Fahrgefühl', en: 'Ride feel' }, kind: 'value', de: 'Lenkempfindlichkeit (0 bis 100)', en: 'Steering sensitivity (0 to 100)', reg: 0xa1, frame: 'cmd2',
+    hde: 'Wie stark der Scooter aufs Lenken beziehungsweise Gewichtsverlagern reagiert. Höher = giftiger und wendiger, niedriger = ruhiger und stabiler. Bereich 0 bis 100.', hen: 'How strongly the scooter reacts to steering or leaning. Higher = sharper and more agile, lower = calmer and more stable. Range 0 to 100.' },
+  { grp: { de: 'Feineinstellung Fahrgefühl', en: 'Ride feel' }, kind: 'value', de: 'Gasannahme (0 bis 100)', en: 'Throttle response (0 to 100)', reg: 0xa2, frame: 'cmd2',
+    hde: 'Wie direkt der Scooter aufs Gas reagiert. Höher = spontaner und ruppiger Antritt, niedriger = sanfter und weicher. Bereich 0 bis 100.', hen: 'How directly the scooter reacts to the throttle. Higher = snappier and rougher pull-away, lower = gentler and smoother. Range 0 to 100.' },
 ];
 function sendSetting(reg, val, frame, label) { transmit(FRAME_FN[frame](reg, val & 0xffff), label, 'reg:' + reg); }
 function settingLabel(s) { return (lang === 'en' ? s.en : s.de); }
+// current on/off state of a setting from the last-read register, or null if unknown
+function settingState(s) {
+  if (s.kind === 'bit') return reg[s.base] != null ? !!(reg[s.base] & s.mask) : null;
+  if (s.kind === 'toggle') return reg[s.reg] != null ? reg[s.reg] !== 0 : null;
+  return null;
+}
+function makeSeg(labels, onClick, activeIdx) {
+  const seg = document.createElement('div'); seg.className = 'seg';
+  labels.forEach((txt, i) => {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'setbtn'; b.textContent = txt;
+    b.disabled = !connected;
+    if (i === activeIdx) b.classList.add('active');
+    b.onclick = () => { onClick(i); if (activeIdx !== -1) { [...seg.children].forEach(c => c.classList.remove('active')); b.classList.add('active'); } };
+    seg.appendChild(b);
+  });
+  return seg;
+}
 function renderSettings() {
   const box = $('settings-body'); if (!box) return;
   box.textContent = '';
   let lastGrp = null;
-  SETTINGS.forEach((s, i) => {
+  SETTINGS.forEach(s => {
     const grp = lang === 'en' ? s.grp.en : s.grp.de;
     if (grp !== lastGrp) { const h = document.createElement('div'); h.className = 'set-grp'; h.textContent = grp; box.appendChild(h); lastGrp = grp; }
-    const row = document.createElement('div'); row.className = 'set-row';
-    const lab = document.createElement('label'); lab.textContent = settingLabel(s); row.appendChild(lab);
+    const row = document.createElement('div'); row.className = 'srow';
+    const lab = document.createElement('div'); lab.className = 'srow-label';
+    const txt = document.createElement('span'); txt.textContent = settingLabel(s); lab.appendChild(txt);
+    if (s.hde || s.hen) { const q = document.createElement('button'); q.type = 'button'; q.className = 'help-btn'; q.textContent = '?'; q.setAttribute('aria-label', 'Info'); q.onclick = () => openHelpText(settingLabel(s), lang === 'en' ? s.hen : s.hde); lab.appendChild(q); }
+    row.appendChild(lab);
     if (s.kind === 'value') {
+      const grp2 = document.createElement('div'); grp2.className = 'vgrp';
       const inp = document.createElement('input'); inp.type = 'number'; inp.min = '0'; inp.max = '65535'; inp.value = (reg[s.reg] != null ? reg[s.reg] : 0); inp.className = 'setinput'; inp.disabled = !connected;
-      const b = document.createElement('button'); b.className = 'setbtn'; b.textContent = t('btnWrite'); b.disabled = !connected;
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'setbtn wbtn'; b.textContent = t('btnWrite'); b.disabled = !connected;
       b.onclick = () => sendSetting(s.reg, parseInt(inp.value, 10) || 0, s.frame, settingLabel(s) + ' = ' + inp.value + ' (reg 0x' + s.reg.toString(16) + ')');
-      row.appendChild(inp); row.appendChild(b);
+      grp2.appendChild(inp); grp2.appendChild(b); row.appendChild(grp2);
     } else if (s.kind === 'lockpair') {
-      const bu = document.createElement('button'); bu.className = 'setbtn'; bu.textContent = t('btnUnlock'); bu.disabled = !connected;
-      bu.onclick = () => sendSetting(s.unlock, 1, s.frame, settingLabel(s) + ': unlock (reg 0x' + s.unlock.toString(16) + ')');
-      const bl = document.createElement('button'); bl.className = 'setbtn'; bl.textContent = t('btnLock'); bl.disabled = !connected;
-      bl.onclick = () => sendSetting(s.lock, 1, s.frame, settingLabel(s) + ': lock (reg 0x' + s.lock.toString(16) + ')');
-      row.appendChild(bu); row.appendChild(bl);
-    } else {   // toggle or bit -> On/Off
-      const on = document.createElement('button'); on.className = 'setbtn'; on.textContent = t('valOn'); on.disabled = !connected;
-      const off = document.createElement('button'); off.className = 'setbtn'; off.textContent = t('valOff'); off.disabled = !connected;
-      const apply = (state) => {
-        if (s.kind === 'bit') { const cur = reg[s.base] || 0; const v = state ? (cur | s.mask) : (cur & ~s.mask & 0xffff); sendSetting(s.base, v, s.frame, settingLabel(s) + ' ' + (state ? 'on' : 'off') + ' (reg 0x' + s.base.toString(16) + ' bit)'); }
-        else sendSetting(s.reg, state ? 1 : 0, s.frame, settingLabel(s) + ' ' + (state ? 'on' : 'off') + ' (reg 0x' + s.reg.toString(16) + ')');
-      };
-      on.onclick = () => apply(true); off.onclick = () => apply(false);
-      row.appendChild(on); row.appendChild(off);
+      row.appendChild(makeSeg([t('btnUnlock'), t('btnLock')], i => {
+        if (i === 0) sendSetting(s.unlock, 1, s.frame, settingLabel(s) + ': unlock (reg 0x' + s.unlock.toString(16) + ')');
+        else sendSetting(s.lock, 1, s.frame, settingLabel(s) + ': lock (reg 0x' + s.lock.toString(16) + ')');
+      }, -1));
+    } else {   // toggle or bit -> An/Aus segmented, active side reflects the read state
+      const st = settingState(s);
+      const active = st === true ? 0 : st === false ? 1 : -1;
+      row.appendChild(makeSeg([t('valOn'), t('valOff')], i => {
+        const state = (i === 0);
+        if (s.kind === 'bit') { const cur = reg[s.base] || 0; const v = state ? (cur | s.mask) : (cur & ~s.mask & 0xffff); reg[s.base] = v; sendSetting(s.base, v, s.frame, settingLabel(s) + ' ' + (state ? 'on' : 'off') + ' (reg 0x' + s.base.toString(16) + ' bit)'); }
+        else { reg[s.reg] = state ? 1 : 0; sendSetting(s.reg, state ? 1 : 0, s.frame, settingLabel(s) + ' ' + (state ? 'on' : 'off') + ' (reg 0x' + s.reg.toString(16) + ')'); }
+      }, active));
     }
     box.appendChild(row);
   });
