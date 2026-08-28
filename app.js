@@ -1,14 +1,13 @@
 // Laufbursche Viron Tool: a Web Bluetooth client for the Viron / MiniRobot / XBOT BLE protocol.
 // Copyright (c) 2026 Laufbursche (https://github.com/Laufbursche42)
 // A self-contained Web Bluetooth client. The protocol layer is Viron: register read/write over a
-// 55 AA frame with a 16-bit
-// one's-complement checksum, plaintext. Everything about the protocol is from static analysis of the
+// 55 AA frame with a 16-bit one's-complement checksum, plaintext. Everything about it is from analysis of the
 // MiniRobot app (com.loby.balance.car.google 11.3.7) plus the plaintext controller firmware, cross
 // checked in Ghidra. Runs in a Web Bluetooth browser: Bluefy on iOS, Chrome/Edge on Android/desktop.
 
 'use strict';
 
-const BUILD = 'v7';   // logged on load so a tester's log reveals which deployed build is running
+const BUILD = 'v8';   // logged on load so a tester's log reveals which deployed build is running
 
 // --------------------------- hex helpers ---------------------------
 
@@ -151,6 +150,34 @@ function refreshTiles() {
   setTile('t-throttle', reg[0x72] != null ? t(reg[0x72] ? 'valOn' : 'valOff') : null);
   setTile('t-fw', reg[0x4e]);
   updateTempoInfo();
+  renderAllRegs();
+}
+// Labels for the registers we have identified; unlabeled ones are shown raw.
+const REG_LABELS = {
+  0x1b: { de: 'Einheit', en: 'Unit' }, 0x1d: { de: 'Modell-ID', en: 'Model id' }, 0x1e: { de: 'Tempolimit', en: 'Speed limit' },
+  0x1f: { de: 'Info-Seite', en: 'Info page' }, 0x21: { de: 'Akkukapazität', en: 'Battery capacity' }, 0x22: { de: 'Geschwindigkeit', en: 'Speed' },
+  0x26: { de: 'Akku', en: 'Battery' }, 0x4e: { de: 'Firmware', en: 'Firmware' }, 0x62: { de: 'Winkel', en: 'Angle' },
+  0x6e: { de: 'Motortyp', en: 'Motor type' }, 0x72: { de: 'Drossel', en: 'Throttle' }, 0x73: { de: 'Normaltempo', en: 'Normal speed' },
+  0x74: { de: 'Schiebehilfe', en: 'Push assist' }, 0x7b: { de: 'Rekuperation', en: 'Recuperation' }, 0x7c: { de: 'Tempomat', en: 'Cruise' },
+  0x7d: { de: 'MaxSpeed (roh)', en: 'MaxSpeed (raw)' }, 0x7e: { de: 'Fahrmodus', en: 'Ride mode' }, 0x82: { de: 'Modus-Konfig', en: 'Mode config' },
+  0xa1: { de: 'Lenkempfindlichkeit', en: 'Steering sensitivity' }, 0xa2: { de: 'Gasannahme', en: 'Throttle response' }, 0xa3: { de: 'Balance', en: 'Balance' },
+  0xa4: { de: 'Ton/Akku', en: 'Sound/battery' }, 0xb2: { de: 'Sperr-Status', en: 'Lock state' }, 0xd3: { de: 'Warn-Bitfeld', en: 'Warning bits' },
+  0xee: { de: 'Radgröße', en: 'Wheel size' }, 0xf2: { de: 'Scheinwerfer', en: 'Headlight' }, 0xf4: { de: 'Antriebsart', en: 'Drive type' },
+  0xc2: { de: 'Grenze Modus 1 max', en: 'Limit mode 1 max' }, 0xc3: { de: 'Grenze Modus 1 min', en: 'Limit mode 1 min' },
+  0xc4: { de: 'Grenze Modus 0 max', en: 'Limit mode 0 max' }, 0xc5: { de: 'Grenze Modus 0 min', en: 'Limit mode 0 min' },
+  0xc6: { de: 'Grenze Modus 2 max', en: 'Limit mode 2 max' }, 0xc7: { de: 'Grenze Modus 2 min', en: 'Limit mode 2 min' },
+};
+function renderAllRegs() {
+  const box = $('all-regs'); if (!box) return;
+  const keys = Object.keys(reg).map(Number).sort((a, b) => a - b);
+  box.textContent = '';
+  keys.forEach(k => {
+    const row = document.createElement('div'); row.className = 'regrow';
+    const a = document.createElement('span'); a.className = 'regaddr'; a.textContent = '0x' + k.toString(16).padStart(2, '0');
+    const l = document.createElement('span'); l.className = 'reglabel'; const lab = REG_LABELS[k]; l.textContent = lab ? (lang === 'en' ? lab.en : lab.de) : '';
+    const v = document.createElement('span'); v.className = 'regval'; v.textContent = reg[k];
+    row.appendChild(a); row.appendChild(l); row.appendChild(v); box.appendChild(row);
+  });
 }
 function statusLabel(s) {
   const map = { disconnected: 'stDisconnected', connecting: 'stConnecting', linking: 'stLinking', connected: 'stConnected', 'no-service': 'stNoService', 'no-char': 'stNoChar' };
@@ -342,6 +369,18 @@ const SETTINGS = [
     hde: 'Wie stark der Scooter aufs Lenken beziehungsweise Gewichtsverlagern reagiert. Höher = giftiger und wendiger, niedriger = ruhiger und stabiler. Bereich 0 bis 100.', hen: 'How strongly the scooter reacts to steering or leaning. Higher = sharper and more agile, lower = calmer and more stable. Range 0 to 100.' },
   { grp: { de: 'Feineinstellung Fahrgefühl', en: 'Ride feel' }, kind: 'value', de: 'Gasannahme (0 bis 100)', en: 'Throttle response (0 to 100)', reg: 0xa2, frame: 'cmd2',
     hde: 'Wie direkt der Scooter aufs Gas reagiert. Höher = spontaner und ruppiger Antritt, niedriger = sanfter und weicher. Bereich 0 bis 100.', hen: 'How directly the scooter reacts to the throttle. Higher = snappier and rougher pull-away, lower = gentler and smoother. Range 0 to 100.' },
+  { grp: { de: 'Fahren', en: 'Riding' }, kind: 'bit', de: 'Antriebsart umschalten', en: 'Switch drive type', base: 0xf4, mask: 0x8000, frame: 'hb',
+    hde: 'Schaltet die Antriebsart um (zum Beispiel Heck-, Front- oder Doppelantrieb). Nur bei Modellen mit mehreren Antriebsarten wirksam.', hen: 'Switches the drive type (for example rear, front or dual drive). Only works on models with more than one drive type.' },
+  { grp: { de: 'Fahren', en: 'Riding' }, kind: 'toggle', de: 'SingleLow-Modus', en: 'SingleLow mode', reg: 0xa5, frame: 'cmd',
+    hde: 'Ein modellabhängiger Sondermodus. Wenn dein Scooter ihn nicht kennt, passiert nichts.', hen: 'A model-dependent special mode. If your scooter does not know it, nothing happens.' },
+  { grp: { de: 'Feinjustage (Rohwerte)', en: 'Fine tuning (raw values)' }, kind: 'value', de: 'Schiebehilfe-Tempo (roh)', en: 'Push-assist speed (raw)', reg: 0x74, frame: 'cmd',
+    hde: 'Das Tempo der Schiebe- beziehungsweise Anfahrhilfe als interner Rohwert. Klein anfangen und testen.', hen: 'The speed of the push or start assist as an internal raw value. Start small and test.' },
+  { grp: { de: 'Feinjustage (Rohwerte)', en: 'Fine tuning (raw values)' }, kind: 'value', de: 'Normaltempo (roh)', en: 'Normal speed (raw)', reg: 0x73, frame: 'cmd',
+    hde: 'Das Tempo im Normalmodus bei Ein-Modus-Modellen als interner Rohwert (nicht km/h).', hen: 'The speed in normal mode on single-mode models as an internal raw value (not km/h).' },
+  { grp: { de: 'Feinjustage (Rohwerte)', en: 'Fine tuning (raw values)' }, kind: 'value', de: 'Leistungsbalance (roh)', en: 'Power balance (raw)', reg: 0xa3, frame: 'cmd2',
+    hde: 'Verteilt die Leistung, bei Doppelantrieb zwischen vorne und hinten. Interner Rohwert.', hen: 'Distributes power, on dual drive between front and rear. Internal raw value.' },
+  { grp: { de: 'Feinjustage (Rohwerte)', en: 'Fine tuning (raw values)' }, kind: 'value', de: 'Fahrbalance (roh)', en: 'Ride balance (raw)', reg: 0xfc, frame: 'cmd2',
+    hde: 'Balance des Fahrverhaltens als interner Rohwert. Nur für Versuche.', hen: 'Balance of the ride behaviour as an internal raw value. For experiments only.' },
 ];
 function sendSetting(reg, val, frame, label) { transmit(FRAME_FN[frame](reg, val & 0xffff), label, 'reg:' + reg); }
 function settingLabel(s) { return (lang === 'en' ? s.en : s.de); }
@@ -562,6 +601,7 @@ function applyLang() {
   { const el = $('status'); setStatus(el ? el.dataset.state : 'disconnected'); }
   updateToggleButton();
   renderSettings();
+  renderAllRegs();
 }
 function initLangSwitch() {
   document.querySelectorAll('#langs button').forEach(b => {

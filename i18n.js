@@ -32,6 +32,8 @@ window.I18N = {
     tileThrottle: "Drossel",
     tileFw: "Firmware",
     liveHint: "Diese Werte kommen direkt vom Scooter. Nicht jedes Modell liefert jeden Wert, dann steht dort ein Strich. Die Anzeige ist eine Hilfe, kein geeichter Tacho.",
+    allRegsTitle: "Alle empfangenen Werte anzeigen",
+    allRegsHint: "Der Scooter meldet mehr als die Kacheln oben. Hier steht jedes empfangene Register mit Nummer und Wert. Bekannte sind benannt, der Rest ist roh. Manche Bedeutungen sind erschlossen, ein echter Mitschnitt schärft sie.",
 
     tempoTitle: "2. Tempo einstellen",
     lblOpen: "Offen (km/h)",
@@ -147,6 +149,8 @@ window.I18N = {
     tileThrottle: "Throttle",
     tileFw: "Firmware",
     liveHint: "These values come straight from the scooter. Not every model provides every value; where it does not, a dash is shown. The display is a help, not a calibrated speedometer.",
+    allRegsTitle: "Show all received values",
+    allRegsHint: "The scooter reports more than the tiles above. Here is every received register with its number and value. Known ones are named, the rest is raw. Some meanings are inferred, a real capture sharpens them.",
 
     tempoTitle: "2. Set the speed",
     lblOpen: "Open (km/h)",
