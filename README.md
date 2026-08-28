@@ -4,9 +4,8 @@ A single-page Web Bluetooth client for the Viron e-scooter (manufacturer app fam
 XBOT / M1ROBOT, vendor LebiTEC). It talks to the scooter locally over Bluetooth: connect, read the
 configuration, set the speed and watch the live values. Nothing leaves your device.
 
-The page framework (design, dark/light theme, two languages, document viewer, log) is shared 1:1 with
-the sibling project [sf-unlock](https://github.com/Laufbursche42/sf-unlock). Only the protocol layer is
-Viron. Protocol details are in [PROTOCOL.md](PROTOCOL.md).
+It is a single self-contained page with a dark/light theme, two languages (DE/EN), an in-page document
+viewer and a full protocol log. Protocol details are in [PROTOCOL.md](PROTOCOL.md).
 
 This is a feasibility study, not a finished product, and it is not verified on a vehicle. No warranty.
 Read [Honest limits](#honest-limits-please-read) before you rely on anything here.

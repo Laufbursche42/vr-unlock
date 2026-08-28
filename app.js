@@ -1,14 +1,14 @@
 // Laufbursche Viron Tool: a Web Bluetooth client for the Viron / MiniRobot / XBOT BLE protocol.
 // Copyright (c) 2026 Laufbursche (https://github.com/Laufbursche42)
-// The page framework (theme, i18n, doc viewer, log, connect flow) is taken 1:1 from the sf-unlock
-// project. Only the protocol layer is Viron: register read/write over a 55 AA frame with a 16-bit
+// A self-contained Web Bluetooth client. The protocol layer is Viron: register read/write over a
+// 55 AA frame with a 16-bit
 // one's-complement checksum, plaintext. Everything about the protocol is from static analysis of the
 // MiniRobot app (com.loby.balance.car.google 11.3.7) plus the plaintext controller firmware, cross
 // checked in Ghidra. Runs in a Web Bluetooth browser: Bluefy on iOS, Chrome/Edge on Android/desktop.
 
 'use strict';
 
-const BUILD = 'v5';   // logged on load so a tester's log reveals which deployed build is running
+const BUILD = 'v6';   // logged on load so a tester's log reveals which deployed build is running
 
 // --------------------------- hex helpers ---------------------------
 
@@ -67,7 +67,7 @@ let connected = false, connecting = false;
 let speedUnlocked = false;   // local lock/unlock state; the toggle shows the action for the other state
 const reg = {};   // last seen register store: dec register -> 16-bit value
 
-// --------------------------- UI helpers (framework, from sf-unlock) ---------------------------
+// --------------------------- UI helpers ---------------------------
 
 function $(id) { return document.getElementById(id); }
 
@@ -169,7 +169,7 @@ function updateToggleButton() {
   b.textContent = speedUnlocked ? t('btnLock') : t('btnUnlock');
 }
 
-// --------------------------- command acknowledgements (framework, from sf-unlock) ---------------------------
+// --------------------------- command acknowledgements ---------------------------
 
 const ACK_TIMEOUT_MS = 3000;
 const pendingAcks = new Map();
@@ -243,7 +243,7 @@ async function doToggle() {
   updateToggleButton();
 }
 
-// --- shortcut deep-link (?do=fast / ?do=slow), mirrors sf-unlock ---
+// --- shortcut deep-link (?do=fast / ?do=slow) ---
 let pendingDeepAction = null;
 function parseDeepLink() {
   try {
@@ -382,7 +382,7 @@ function handleFrame(b) {
   }
 }
 
-// --------------------------- connect / disconnect (framework, from sf-unlock) ---------------------------
+// --------------------------- connect / disconnect ---------------------------
 
 function charProps(c) { const p = c.properties || {}; return ['read', 'write', 'writeWithoutResponse', 'notify', 'indicate'].filter(k => p[k]).join(',') || '-'; }
 
@@ -498,7 +498,7 @@ function onCharacteristicValue(ev) {
   } catch (e) { log('RX parse error: ' + e, 'log-err'); }
 }
 
-// --------------------------- language (framework, from sf-unlock) ---------------------------
+// --------------------------- language ---------------------------
 
 let lang = 'de';
 function table() { return (window.I18N && window.I18N[lang]) || {}; }
@@ -531,7 +531,7 @@ function initLangSwitch() {
   });
 }
 
-// --------------------------- theme (framework, from sf-unlock) ---------------------------
+// --------------------------- theme ---------------------------
 
 function applyTheme(dark) {
   document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
@@ -551,7 +551,7 @@ function initTheme() {
   if (b) b.addEventListener('click', () => { applyTheme(document.documentElement.getAttribute('data-theme') === 'light'); });
 }
 
-// --------------------------- document viewer (framework, from sf-unlock) ---------------------------
+// --------------------------- document viewer ---------------------------
 
 const DOC_TITLES = {
   'GUIDE.de.md': 'footGuide', 'GUIDE.en.md': 'footGuide',
