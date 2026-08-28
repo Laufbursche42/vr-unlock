@@ -1,45 +1,46 @@
-# vr-unlock
+# Laufbursche Viron Tool (vr-unlock)
 
-Web-Bluetooth-Werkzeug für den Viron-E-Scooter (App-Familie MiniRobot / XBOT, Hersteller LebiTEC).
-Es spricht das belegte BLE-Protokoll des Scooters direkt an: verbinden, Register lesen, die
-Speed-Register schreiben sowie die Live-Telemetrie ansehen. Eine einzige, in sich geschlossene Seite
-(`index.html`, CSS plus JS inline), analog zum Nachbarprojekt sf-unlock.
+A single-page Web Bluetooth client for the Viron e-scooter (manufacturer app family MiniRobot /
+XBOT / M1ROBOT, vendor LebiTEC). It talks to the scooter locally over Bluetooth: connect, read
+registers, write the speed registers and watch the live telemetry. Nothing leaves your device.
 
-## Belegtes Protokoll
+The page framework (design, dark/light theme, two languages, document viewer, log) is shared 1:1 with
+the sibling project [sf-unlock](https://github.com/Laufbursche42/sf-unlock). Only the protocol layer is
+Viron.
 
-- Transport: Nordic UART. Dienst `6e400001`, Schreiben auf `6e400002`, Notifications auf `6e400003`.
-  Die App kann zusätzlich vier weitere Hardware-Varianten (ae00, ffe0, fff0), die das Tool automatisch
-  erkennt.
-- Schreibframe: `55 AA <len+2> 06 03 <addr> <wert_lo> <wert_hi> <cks_lo> <cks_hi>`. Werte sind 16-Bit
-  little-endian. Prüfsumme = 16-Bit-Einserkomplement der Byte-Summe ab dem Längenbyte, little-endian.
-  Beispiel Tempolimit aus (Register 0x72 = 0): `55 AA 04 06 03 72 00 00 80 FF`.
-- Der Sendeweg ist ungesichert (kein Passwort, kein Ack). Die App-seitige 25-km/h-Grenze ist nur eine
-  Anzeigegrenze des Sliders.
+## What it does
 
-## Speed-Register
+- Connects over Nordic UART (and the known alternative transports AE00, FFE0, FFF0), detected
+  automatically.
+- Builds command frames exactly like the app: `55 AA <len+2> 06 03 <addr> <val_lo> <val_hi> <cks_lo>
+  <cks_hi>`, values 16-bit little-endian, checksum = 16-bit one's complement of the byte sum.
+- Speed levers: speed-limit on/off (register `0x72`), max speed (`0x7d`) and the gear limits
+  (`0x1e`, `0xef`, `0xf0`, `0xf1`, `0xf3`).
+- Register read (diagnostics), a free `SendWriteCmd` and a raw-frame sender.
+- Live telemetry from the scooter's cmd6 notifications, plus a full hex protocol log.
 
-- `0x72` Tempolimit an/aus (Bool)
-- `0x7d` Höchstgeschwindigkeit (MaxSpeed)
-- `0x1e`, `0xef`, `0xf0`, `0xf1`, `0xf3` Gang- bzw. Modus-Limits
-- `0xc2..0xc7` Speed-Grenzen je Fahrmodus, vom Controller gemeldet (nur lesen)
+## Honest scope
 
-Wichtig: Der eigentliche Deckel sitzt im Controller. Ein hochgeschriebenes Limit wird vom Controller
-als Sollwert genommen, aber durch dessen eigene harte Klammern begrenzt. Das ist per Ghidra an der
-Klartext-Controller-Firmware bestätigt. Erst lesen, dann in kleinen Schritten schreiben.
+The app-side 25 km/h limit is only a slider display bound. The BLE write path is unauthenticated
+(no password, no ack). The real speed cap lives in the controller firmware: a raised limit is taken as
+a target but bounded by the controller's own hard clamps. This was confirmed in Ghidra on the
+plaintext controller firmware. See [PROTOCOL.md](PROTOCOL.md).
 
-## Nutzung
+This is a feasibility study, not a finished product, and it is not verified on a vehicle. No warranty.
 
-Web-Bluetooth läuft nur im sicheren Kontext (https oder localhost) in Chrome/Edge (Android, Desktop)
-oder Bluefy (iOS). Lokal starten:
+## Run it locally
+
+Web Bluetooth needs a secure context (https or localhost) in Chrome/Edge (Android, desktop) or Bluefy
+(iOS). From the project folder:
 
 ```
 py -3 -m http.server 50001
 ```
 
-Dann `http://localhost:50001/` öffnen.
+then open `http://localhost:50001/`.
 
-## Rechtlicher Hinweis
+## Legal
 
-Das Anheben der Höchstgeschwindigkeit hebt die Drossel auf. Die ABE erlischt damit und der Betrieb auf
-öffentlichen Wegen ist dann nicht erlaubt. Alles gilt nur für das eigene Gerät auf privatem Gelände
-sowie auf eigenes Risiko.
+Only for your own device on private ground. Raising the top speed removes the throttle limit, the road
+approval lapses and riding on public roads is then not allowed. See
+[LICENSE.md](LICENSE.md), [PRIVACY.md](PRIVACY.md) and [TRADEMARKS.md](TRADEMARKS.md).
