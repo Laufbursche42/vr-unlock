@@ -7,7 +7,7 @@
 
 'use strict';
 
-const BUILD = 'v8';   // logged on load so a tester's log reveals which deployed build is running
+const BUILD = 'v9';   // logged on load so a tester's log reveals which deployed build is running
 
 // --------------------------- hex helpers ---------------------------
 
@@ -34,7 +34,20 @@ function buildFrame(cmd, type, addr, payload) {
 function frameWriteCmd(addr, val)  { return buildFrame(0x06, 0x03, addr & 0xff, [val & 0xff, (val >> 8) & 0xff]); }
 function frameWriteCmd2(addr, val) { return buildFrame(0x0A, 0x03, addr & 0xff, [val & 0xff, (val >> 8) & 0xff]); }
 function frameWriteHB(addr, val)   { return buildFrame(0x20, 0x03, addr & 0xff, [val & 0xff, (val >> 8) & 0xff]); }
+function frameWriteBLE(addr, val)  { return buildFrame(0x21, 0x03, addr & 0xff, [val & 0xff, (val >> 8) & 0xff]); }   // SendWriteCmd_BLE (unit, password)
 function frameWrite(addr, val)     { return frameWriteCmd(addr, val); }   // alias used by the free command
+
+// The app derives the model variant from the BLE device name (belegt: AppActivity.java:719
+// SetAppType(bluetoothDevice.getName()); native UserInterface::SetAppType parses that name). Variant 0
+// ("M6") uses SendWriteCmd (0x06) for the limit toggle; every other variant (incl. "M0Robot" -> 3)
+// uses SendWriteCmd2 (0x0A). Only the 0-vs-not-0 split matters for the frames the tool sends.
+let appVariant = 3;
+function detectVariant(name) {
+  const n = name || '';
+  if (n.indexOf('M6') !== -1) return 0;
+  return 3;   // default, matches "M0Robot" and most scooter names
+}
+function limitFrame(reg, val) { return appVariant === 0 ? frameWriteCmd(reg, val) : frameWriteCmd2(reg, val); }
 // Read request: best-effort (write path is belegt, the read form is inferred). cmd 6, type 1, count.
 function frameRead(addr, count) { return buildFrame(0x06, 0x01, addr & 0xff, [(count || 1) & 0xff]); }
 
@@ -263,8 +276,8 @@ function speedRegForMode() {
   return 0xf1;
 }
 async function applySpeed(kmh, throttleOn) {
-  // 1) speed limit on/off, register 0x72 (like onClickLimit; the common variant uses cmd 0x0A)
-  await transmit(frameWriteCmd2(0x72, throttleOn ? 1 : 0), 'limit ' + (throttleOn ? 'on' : 'off') + ' (reg 0x72, cmd 0x0A)', 'reg:' + 0x72);
+  // 1) speed limit on/off, register 0x72 (like onClickLimit; frame per detected model variant)
+  await transmit(limitFrame(0x72, throttleOn ? 1 : 0), 'limit ' + (throttleOn ? 'on' : 'off') + ' (reg 0x72, variant ' + appVariant + ')', 'reg:' + 0x72);
   if (!connected) return;
   await sleep(80);
   // 2) the km/h value to the per-mode limit-speed register, exactly like the app (HB frame, cmd 0x20)
@@ -343,7 +356,7 @@ function cmdRaw(hexStr) {
 // Each row replicates one app handler: register + frame type + value. frame: 'cmd' 0x06, 'cmd2' 0x0A,
 // 'hb' 0x20. kind: 'lockpair' two buttons, 'toggle' on/off full value, 'bit' read-modify-write one bit,
 // 'value' number + write.
-const FRAME_FN = { cmd: frameWriteCmd, cmd2: frameWriteCmd2, hb: frameWriteHB };
+const FRAME_FN = { cmd: frameWriteCmd, cmd2: frameWriteCmd2, hb: frameWriteHB, ble: frameWriteBLE };
 const SETTINGS = [
   { grp: { de: 'Sicherheit', en: 'Security' }, kind: 'lockpair', de: 'Wegfahrsperre (Diebstahlschutz)', en: 'Immobilizer (anti-theft)', unlock: 0x70, lock: 0x71, frame: 'cmd',
     hde: 'Der Diebstahlschutz. Sperren blockiert das Anfahren, Entsperren gibt den Scooter wieder frei. Das hat nichts mit dem Tempo zu tun.', hen: 'The anti-theft lock. Lock blocks moving off, Unlock releases the scooter again. This has nothing to do with speed.' },
@@ -355,6 +368,8 @@ const SETTINGS = [
     hde: 'Interner Motortyp-Index. Nur ändern, wenn du genau weißt, welchen Motor dein Scooter hat. Ein falscher Wert kann die Fahrt stören.', hen: 'Internal motor-type index. Only change it if you know exactly which motor your scooter has. A wrong value can disturb the ride.' },
   { grp: { de: 'Fahren', en: 'Riding' }, kind: 'value', de: 'Akkukapazität', en: 'Battery capacity', reg: 0x21, frame: 'hb',
     hde: 'Die im Scooter hinterlegte Akkugröße. Sie beeinflusst die Reichweiten- und Prozentanzeige, nicht die echte Kapazität des Akkus.', hen: 'The battery size stored in the scooter. It affects the range and percentage display, not the real capacity of the battery.' },
+  { grp: { de: 'Anzeige', en: 'Display' }, kind: 'toggle', de: 'Anzeige in mph (statt km/h)', en: 'Display in mph (instead of km/h)', reg: 0x1b, frame: 'ble',
+    hde: 'Schaltet die Anzeigeeinheit um. An = mph (imperial), Aus = km/h (metrisch). Geht als BLE-Frame (cmd 0x21), wie in der App.', hen: 'Switches the display unit. On = mph (imperial), Off = km/h (metric). Sent as a BLE frame (cmd 0x21), like the app.' },
   { grp: { de: 'Licht und Warnungen', en: 'Light and warnings' }, kind: 'toggle', de: 'Scheinwerfer', en: 'Headlight', reg: 0xf2, frame: 'hb',
     hde: 'Das Frontlicht an- oder ausschalten.', hen: 'Turn the front light on or off.' },
   { grp: { de: 'Licht und Warnungen', en: 'Light and warnings' }, kind: 'bit', de: 'Nabenlicht', en: 'Hub light', base: 0xd3, mask: 0x20, frame: 'cmd2',
@@ -536,6 +551,8 @@ async function connectGatt(dev) {
     log('connected: ' + (device.name || '(no name)') + ' [' + device.id + ']', 'log-ok');
     log('transport ' + usedTransport.name + '  service ' + usedTransport.service, 'log-ok');
     log('char  write=' + writeChar.uuid + '  notify=' + notifyChar.uuid, 'log-ok');
+    appVariant = detectVariant(device.name);
+    log('model variant from name "' + (device.name || '') + '": ' + appVariant + (appVariant === 0 ? ' (M6 family, limit via cmd 0x06)' : ' (limit via cmd 0x0A)'), 'log-ok');
     autoReadConfig();
   } catch (e) {
     setStatus('disconnected');
