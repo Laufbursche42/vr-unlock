@@ -22,30 +22,34 @@ schicken.
 Nach dem Verbinden zeigt die Zeile unter dem Knopf den erkannten Transport (in der Regel Nordic UART)
 und die Steuer-Karten werden aktiv.
 
-## Schritt 2: Register lesen (immer zuerst)
+Direkt nach dem Verbinden liest die Seite selbst die Einstellungen deines Scooters aus. Du musst
+nichts anstoßen. Steht in der Tempo-Karte eine Zeile wie "Deine Steuerung erlaubt bis zu X km/h",
+hat das Auslesen geklappt und die Seite stellt den offenen Wert passend ein.
 
-Bevor du etwas schreibst, lies die echten Grenzwerte aus dem Controller. In der Karte Register lesen
-steht als Ziel schon 0xc2. Der Knopf 0xc2..0xc7 auslesen holt die Speed-Grenzen aller Fahrmodi.
-Interessant sind auch 0x1d/0x1e (Modell-/Regionskennung) und das BLE-Register 0x15. Die Antworten
-erscheinen in den Live-Werten und roh als Hex im Log.
+## Schritt 2: Tempo einstellen
 
-## Schritt 3: Die Speed-Hebel
+In der Tempo-Karte trägst du zwei Werte ein:
 
-In der Karte Speed-Hebel liegen die belegten Register:
+- Offen: dein Wunschtempo.
+- Gedrosselt: die zugelassenen 20 km/h.
 
-- Tempolimit (Reg 0x72): Limit AUS schreibt 0, Limit AN schreibt 1.
-- MaxSpeed-Rohwert (Reg 0x7d): ein 16-Bit-Rohwert. Der App-Default ist 6000. Das ist kein km/h-Wert
-  sondern eine interne Motoreinheit.
-- Gang-Limit: wähle das Register (0x1e, 0xf1, 0xf3, 0xef, 0xf0) und schreibe einen Wert. Diese Werte
-  sind km/h-nah.
+Der große Knopf schaltet zwischen beiden um. Entsperren schreibt den offenen Wert an den Scooter und
+schaltet die Drossel aus. Sperren schreibt den gedrosselten Wert und schaltet die Drossel wieder ein.
+Beide Werte merkt sich der Browser auf diesem Gerät. Fang mit einem kleinen Schritt an und miss die
+Reaktion am Fahrzeug.
 
-Gehe in kleinen Schritten vor und miss nach jedem Schreiben die Reaktion am Fahrzeug.
+## Schritt 3: Verknüpfungen (optional)
 
-## Schritt 4: Freier Befehl
+In der Karte Verknüpfungen findest du fertige Adressen für einen Schnellzugriff. Legst du dir auf dem
+Handy eine Verknüpfung darauf an, verbindet sich die Seite beim Öffnen mit dem zuletzt genutzten
+Scooter und setzt sofort das Tempo: die eine Verknüpfung entsperrt, die andere sperrt. Der Scooter
+muss dabei an sein und in Reichweite.
 
-Für eigene Versuche baut der freie Befehl aus Adresse plus Wert einen sauberen Schreibframe. Der
-Rohframe-Sender schickt genau die eingegebenen Bytes, ohne die Prüfsumme nachzurechnen. Ein Beispiel
-für Limit aus steht als Platzhalter im Feld: 55 AA 04 06 03 72 00 00 80 FF.
+## Fachfunktionen (nur bei Bedarf)
+
+Wenn du das Protokoll verstehst, kannst du unten den Haken Fachfunktionen anzeigen setzen. Dann
+erscheinen Werkzeuge, um einzelne Register zu lesen und zu schreiben sowie rohe Befehle zu senden.
+Normale Nutzer brauchen das nicht.
 
 ## Was die Live-Werte bedeuten
 

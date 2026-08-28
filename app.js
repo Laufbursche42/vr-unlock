@@ -8,7 +8,7 @@
 
 'use strict';
 
-const BUILD = 'v1';   // logged on load so a tester's log reveals which deployed build is running
+const BUILD = 'v2';   // logged on load so a tester's log reveals which deployed build is running
 
 // --------------------------- hex helpers ---------------------------
 
@@ -51,12 +51,13 @@ const TRANSPORT_ORDER = ['nordic', 'ae00', 'ffe0', 'fff0a', 'fff0b'];
 const ALL_SERVICES = [...new Set(TRANSPORT_ORDER.map(k => TRANSPORTS[k].service))];
 const SCAN_PREFIX = 'M0Robot';   // the Viron advertises with this name part (Fremdbericht)
 
-const LS_THEME = 'vru_theme', LS_DEVICE = 'vru_device';
+const LS_THEME = 'vru_theme', LS_DEVICE = 'vru_device', LS_OPEN = 'vru_open', LS_STOCK = 'vru_stock';
 
 // --------------------------- state ---------------------------
 
 let device = null, server = null, writeChar = null, notifyChar = null, usedTransport = TRANSPORTS.nordic;
 let connected = false, connecting = false;
+let speedUnlocked = false;   // local lock/unlock state; the toggle shows the action for the other state
 const reg = {};   // last seen register store: dec register -> 16-bit value
 
 // --------------------------- UI helpers (framework, from sf-unlock) ---------------------------
@@ -110,7 +111,7 @@ function copyLogFallback(text) {
 }
 
 // Help "?" icons: each card can show its explanation in a modal.
-const HELP = { read: ['readTitle', 'readHelp'], speed: ['speedTitle', 'speedHelp'], free: ['freeTitle', 'freeHelp'], disclaimer: ['footDisclaimer', 'disclaimerText'] };
+const HELP = { tempo: ['tempoTitle', 'tempoHelp'], read: ['readTitle', 'readHelp'], fine: ['fineTitle', 'fineHelp'], free: ['freeTitle', 'freeHelp'], disclaimer: ['footDisclaimer', 'disclaimerText'] };
 function openHelp(key) {
   const m = HELP[key]; if (!m) return;
   const dlg = $('help'); if (!dlg) return;
@@ -127,14 +128,14 @@ function clearLog() {
   log('log cleared');
 }
 function setTile(id, val) { const el = $(id); if (el) el.textContent = (val == null ? '-' : val); }
-function resetTiles() { ['t-speed', 't-sub', 't-mode', 't-limit', 't-max', 't-fw'].forEach(id => setTile(id, null)); }
+function resetTiles() { ['t-speed', 't-batt', 't-mode', 't-limit', 't-fw'].forEach(id => setTile(id, null)); const inf = $('tempo-info'); if (inf) inf.textContent = ''; }
 function refreshTiles() {
-  setTile('t-speed', reg[0x22] != null ? (reg[0x22] * 0.21944).toFixed(1) : null);
-  setTile('t-sub', reg[0x26]);
+  setTile('t-speed', reg[0x22] != null ? (reg[0x22] * 0.21944).toFixed(0) + ' km/h' : null);
+  setTile('t-batt', reg[0x26]);
   setTile('t-mode', reg[0x7e]);
-  setTile('t-limit', reg[0x72]);
-  setTile('t-max', reg[0x7d]);
+  setTile('t-limit', reg[0x72] != null ? t(reg[0x72] ? 'valOn' : 'valOff') : null);
   setTile('t-fw', reg[0x4e]);
+  updateTempoInfo();
 }
 function statusLabel(s) {
   const map = { disconnected: 'stDisconnected', connecting: 'stConnecting', linking: 'stLinking', connected: 'stConnected', 'no-service': 'stNoService', 'no-char': 'stNoChar' };
@@ -150,8 +151,13 @@ function setStatus(s) {
   }
 }
 function setControlsEnabled(on) {
-  ['btn-read', 'btn-read-caps', 'btn-limit-off', 'btn-limit-on', 'btn-max', 'btn-gear', 'btn-cmd', 'btn-raw']
+  ['open-in', 'stock-in', 'btn-toggle', 'btn-read', 'btn-read-caps', 'btn-max', 'btn-gear', 'btn-cmd', 'btn-raw']
     .forEach(id => { const el = $(id); if (el) el.disabled = !on; });
+  updateToggleButton();
+}
+function updateToggleButton() {
+  const b = $('btn-toggle'); if (!b) return;
+  b.textContent = speedUnlocked ? t('btnLock') : t('btnUnlock');
 }
 
 // --------------------------- command acknowledgements (framework, from sf-unlock) ---------------------------
@@ -199,7 +205,76 @@ function parseHexAddr(s) { return parseInt(String(s).replace(/^0x/i, ''), 16) & 
 
 function cmdRead(addr) { transmit(frameRead(addr, 1), 'read 0x' + addr.toString(16), 'reg:' + addr); }
 async function cmdReadCaps() { for (let a = 0xc2; a <= 0xc7; a++) { await transmit(frameRead(a, 1), 'read 0x' + a.toString(16), 'reg:' + a); await new Promise(r => setTimeout(r, 120)); } }
-function cmdLimit(on) { transmit(frameWrite(0x72, on ? 1 : 0), 'speed limit ' + (on ? 'ON' : 'OFF') + ' (reg 0x72)', 'reg:' + 0x72); }
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const GEAR_REGS = [0x1e, 0xf1, 0xf3];   // km/h-near limits written by the app's LimitSpeed handlers
+
+// --- plain-language speed: two values (open / throttled) and one Unlock/Lock toggle ---
+function clampKmh(v, def) { v = parseInt(v, 10); if (isNaN(v)) v = def; return Math.max(6, Math.min(60, v)); }
+function openVal() { return clampKmh(($('open-in') || {}).value, 25); }
+function stockVal() { return clampKmh(($('stock-in') || {}).value, 20); }
+async function applySpeed(kmh, throttleOn) {
+  await transmit(frameWrite(0x72, throttleOn ? 1 : 0), 'throttle ' + (throttleOn ? 'on' : 'off') + ' (reg 0x72)', 'reg:' + 0x72);
+  for (const r of GEAR_REGS) { if (!connected) return; await transmit(frameWrite(r, kmh), 'speed ' + kmh + ' km/h (reg 0x' + r.toString(16) + ')', 'reg:' + r); await sleep(80); }
+}
+async function doToggle() {
+  if (speedUnlocked) { log('lock -> ' + stockVal() + ' km/h', 'log-ok'); await applySpeed(stockVal(), true); speedUnlocked = false; }
+  else { log('unlock -> ' + openVal() + ' km/h', 'log-ok'); await applySpeed(openVal(), false); speedUnlocked = true; }
+  updateToggleButton();
+}
+
+// --- shortcut deep-link (?do=fast / ?do=slow), mirrors sf-unlock ---
+let pendingDeepAction = null;
+function parseDeepLink() {
+  try {
+    let a = (new URLSearchParams(location.search).get('do') || '').toLowerCase();
+    if (!a && location.hash) a = (new URLSearchParams(location.hash.replace(/^#/, '')).get('do') || '').toLowerCase();
+    if (a === 'slow' || a === 'fast') { pendingDeepAction = a; log('shortcut: ' + a + ' requested'); }
+  } catch (e) {}
+}
+function maybeRunDeepAction() {
+  if (!pendingDeepAction || !connected) return;
+  const a = pendingDeepAction; pendingDeepAction = null;
+  if (a === 'fast') { log('shortcut: unlock -> ' + openVal() + ' km/h'); applySpeed(openVal(), false); speedUnlocked = true; }
+  else { log('shortcut: lock -> ' + stockVal() + ' km/h'); applySpeed(stockVal(), true); speedUnlocked = false; }
+  updateToggleButton();
+}
+async function tryAutoReconnect() {
+  if (!navigator.bluetooth || !navigator.bluetooth.getDevices) return;
+  try {
+    const devs = await navigator.bluetooth.getDevices();
+    if (!devs || !devs.length) return;
+    const savedId = localStorage.getItem(LS_DEVICE);
+    let dev = (savedId && devs.find(d => d.id === savedId)) || devs.find(d => (d.name || '').startsWith('M0')) || null;
+    if (!dev) return;
+    log('auto-reconnect: ' + (dev.name || dev.id));
+    await connectGatt(dev);
+  } catch (e) { log('auto-reconnect skipped: ' + e); }
+}
+
+// --- automatic read-out on connect: the user does not press "read", the app does it and builds on it ---
+async function autoReadConfig() {
+  const info = $('tempo-info'); if (info) info.textContent = t('tempoReading');
+  const addrs = [0x7e, 0x82, 0x72, 0x7d, 0x22, 0x26, 0x4e, 0x1d, 0x1e, 0x15, 0xc2, 0xc3, 0xc4, 0xc5, 0xc6, 0xc7];
+  log('reading the scooter configuration (' + addrs.length + ' registers) ...');
+  for (const a of addrs) { if (!connected) return; await transmit(frameRead(a, 1), 'auto-read 0x' + a.toString(16)); await sleep(90); }
+  setTimeout(updateTempoInfo, 1500);
+  maybeRunDeepAction();
+}
+function controllerMax() {
+  const vals = [reg[0xc2], reg[0xc4], reg[0xc6]].filter(v => typeof v === 'number' && v > 0 && v < 200);
+  return vals.length ? Math.max(...vals) : null;
+}
+function updateTempoInfo() {
+  const info = $('tempo-info'); if (!info) return;
+  if (!connected) { info.textContent = ''; return; }
+  const mx = controllerMax();
+  if (mx) {
+    info.textContent = t('tempoAllows').replace('%s', mx);
+    const w = $('open-in'); if (w) { w.max = String(Math.max(mx, 60)); if (!w.dataset.touched) w.value = String(mx); }
+  } else if (info.textContent !== t('tempoReading')) {
+    info.textContent = t('tempoUnknown');
+  }
+}
 function cmdMaxSpeed(val) { transmit(frameWrite(0x7d, val & 0xffff), 'max speed ' + val + ' (reg 0x7d)', 'reg:' + 0x7d); }
 function cmdGear(addr, val) { transmit(frameWrite(addr, val & 0xffff), 'gear limit ' + val + ' (reg 0x' + addr.toString(16) + ')', 'reg:' + addr); }
 function cmdFree(addr, val) { transmit(frameWrite(addr, val & 0xffff), 'SendWriteCmd(0x' + addr.toString(16) + ', ' + val + ')', 'reg:' + addr); }
@@ -307,6 +382,7 @@ async function connectGatt(dev) {
     log('connected: ' + (device.name || '(no name)') + ' [' + device.id + ']', 'log-ok');
     log('transport ' + usedTransport.name + '  service ' + usedTransport.service, 'log-ok');
     log('char  write=' + writeChar.uuid + '  notify=' + notifyChar.uuid, 'log-ok');
+    autoReadConfig();
   } catch (e) {
     setStatus('disconnected');
     log('connect failed: ' + e, 'log-err');
@@ -316,6 +392,7 @@ async function connectGatt(dev) {
 function onDisconnected(ev) {
   if (ev && ev.target && ev.target !== device) return;
   connected = false;
+  speedUnlocked = false;
   clearAcks();
   setStatus('disconnected');
   setControlsEnabled(false);
@@ -329,6 +406,7 @@ function disconnectBle() {
   try { if (d && d.gatt && d.gatt.connected) d.gatt.disconnect(); } catch (e) {}
   device = null; server = null; writeChar = null; notifyChar = null;
   connected = false;
+  speedUnlocked = false;
   clearAcks();
   setStatus('disconnected');
   setControlsEnabled(false);
@@ -367,6 +445,7 @@ function applyLang() {
   { const el = $('build-ver'); if (el) el.textContent = t('buildLabel') + ' ' + BUILD; }
   document.querySelectorAll('#langs button').forEach(b => { b.setAttribute('aria-pressed', String(b.dataset.lang === lang)); });
   { const el = $('status'); setStatus(el ? el.dataset.state : 'disconnected'); }
+  updateToggleButton();
 }
 function initLangSwitch() {
   document.querySelectorAll('#langs button').forEach(b => {
@@ -526,10 +605,14 @@ window.addEventListener('DOMContentLoaded', () => {
   setStatus('disconnected');
 
   $('btn-conn').addEventListener('click', () => { if ($('btn-conn').dataset.act === 'disconnect') disconnectBle(); else pickAndConnect(); });
+  $('btn-toggle').addEventListener('click', doToggle);
+  { try { const o = localStorage.getItem(LS_OPEN); if (o && $('open-in')) $('open-in').value = o; } catch (e) {} }
+  { try { const s = localStorage.getItem(LS_STOCK); if (s && $('stock-in')) $('stock-in').value = s; } catch (e) {} }
+  { const o = $('open-in'); if (o) o.addEventListener('input', () => { o.dataset.touched = '1'; try { localStorage.setItem(LS_OPEN, o.value); } catch (e) {} }); }
+  { const s = $('stock-in'); if (s) s.addEventListener('input', () => { try { localStorage.setItem(LS_STOCK, s.value); } catch (e) {} }); }
+  { const cb = $('expert-toggle'); if (cb) { const apply = () => ['exp-read', 'exp-fine', 'exp-free'].forEach(id => { const el = $(id); if (el) el.hidden = !cb.checked; }); cb.addEventListener('change', apply); apply(); } }
   $('btn-read').addEventListener('click', () => cmdRead(parseHexAddr($('read-addr').value)));
   $('btn-read-caps').addEventListener('click', cmdReadCaps);
-  $('btn-limit-off').addEventListener('click', () => cmdLimit(false));
-  $('btn-limit-on').addEventListener('click', () => cmdLimit(true));
   $('btn-max').addEventListener('click', () => cmdMaxSpeed(parseInt($('max-in').value, 10) || 0));
   $('btn-gear').addEventListener('click', () => cmdGear(parseHexAddr($('gear-reg').value), parseInt($('gear-val').value, 10) || 0));
   $('btn-cmd').addEventListener('click', () => cmdFree(parseHexAddr($('cmd-addr').value), parseInt($('cmd-val').value, 10) || 0));
@@ -540,4 +623,6 @@ window.addEventListener('DOMContentLoaded', () => {
 
   setControlsEnabled(false);
   if (!navigator.bluetooth) log('Web Bluetooth not available. On iOS use the Bluefy browser.', 'log-err');
+  parseDeepLink();
+  if (pendingDeepAction) tryAutoReconnect();
 });

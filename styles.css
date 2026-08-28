@@ -172,3 +172,7 @@ dialog::backdrop { background: var(--backdrop); }
 .help-btn:hover { color: var(--accent); border-color: var(--accent); }
 #help { max-width: 520px; }
 #help #help-body { margin: 0; }
+
+/* Viron: Expertenmodus-Umschalter (Checkbox-Zeile) */
+.switch-row { display: flex; align-items: center; gap: .55rem; cursor: pointer; font-weight: 600; }
+.switch-row input { width: 1.15rem; height: 1.15rem; }

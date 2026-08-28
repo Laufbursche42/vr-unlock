@@ -20,30 +20,31 @@ Bluetooth device and, after connecting, the GATT services. Then copy the log and
 After connecting, the line under the button shows the detected transport (usually Nordic UART) and the
 control cards become active.
 
-## Step 2: Read registers (always first)
+Right after connecting the page reads your scooter's settings by itself. You do not have to trigger
+anything. If the tempo card shows a line like "your controller allows up to X km/h", the readout
+worked and the page sets the open value accordingly.
 
-Before writing anything, read the real limits from the controller. The read card has 0xc2 as the
-default target. The "Read 0xc2..0xc7" button fetches the per-mode speed limits. Also useful are
-0x1d/0x1e (model/region signature) and the BLE register 0x15. The answers appear in the live values
-and raw as hex in the log.
+## Step 2: Set the speed
 
-## Step 3: The speed levers
+In the tempo card you enter two values:
 
-The speed card holds the proven registers:
+- Open: your desired speed.
+- Throttled: the legal 20 km/h.
 
-- Speed limit (reg 0x72): Limit OFF writes 0, Limit ON writes 1.
-- MaxSpeed raw value (reg 0x7d): a 16-bit raw value. The app default is 6000. This is not km/h but an
-  internal motor unit.
-- Gear limit: pick the register (0x1e, 0xf1, 0xf3, 0xef, 0xf0) and write a value. These are close to
-  km/h.
+The big button toggles between them. Unlock writes the open value to the scooter and turns the throttle
+off. Lock writes the throttled value and turns the throttle on again. The browser remembers both values
+on this device. Start with a small step and measure the reaction on the vehicle.
 
-Go in small steps and measure the reaction on the vehicle after each write.
+## Step 3: Shortcuts (optional)
 
-## Step 4: Free command
+The shortcuts card has ready-made addresses for quick access. If you add a home-screen shortcut to one
+of them, opening it reconnects to the last scooter and sets the speed at once: one shortcut unlocks,
+the other locks. The scooter has to be on and in range.
 
-For your own experiments the free command builds a clean write frame from address plus value. The raw
-frame sender sends exactly the entered bytes, without recomputing the checksum. An example for
-"limit off" is in the field as a placeholder: 55 AA 04 06 03 72 00 00 80 FF.
+## Expert functions (only if needed)
+
+If you understand the protocol, tick "Show expert functions" further down. Tools to read and write
+single registers and to send raw commands appear. Normal users do not need this.
 
 ## What the live values mean
 
