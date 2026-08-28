@@ -176,3 +176,18 @@ dialog::backdrop { background: var(--backdrop); }
 /* Viron: Expertenmodus-Umschalter (Checkbox-Zeile) */
 .switch-row { display: flex; align-items: center; gap: .55rem; cursor: pointer; font-weight: 600; }
 .switch-row input { width: 1.15rem; height: 1.15rem; }
+
+/* Viron: zwei saubere Spalten fuer Offen/Gedrosselt */
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.field input { width: 100%; flex: none; }
+
+/* Viron: aufklappbare Fachfunktionen (details), standardmaessig zu */
+details.exp { display: block; }
+details.exp > * { margin-top: 12px; }
+details.exp > summary { margin-top: 0; cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px;
+  font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+details.exp > summary::-webkit-details-marker { display: none; }
+details.exp > summary::before { content: "+"; color: var(--accent); font-size: 15px; line-height: 1; width: 12px; text-align: center; }
+details.exp[open] > summary::before { content: "-"; }
+details.exp .card-head h3 { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 0; font-weight: 700; }

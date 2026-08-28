@@ -8,7 +8,7 @@
 
 'use strict';
 
-const BUILD = 'v2';   // logged on load so a tester's log reveals which deployed build is running
+const BUILD = 'v3';   // logged on load so a tester's log reveals which deployed build is running
 
 // --------------------------- hex helpers ---------------------------
 
@@ -128,12 +128,13 @@ function clearLog() {
   log('log cleared');
 }
 function setTile(id, val) { const el = $(id); if (el) el.textContent = (val == null ? '-' : val); }
-function resetTiles() { ['t-speed', 't-batt', 't-mode', 't-limit', 't-fw'].forEach(id => setTile(id, null)); const inf = $('tempo-info'); if (inf) inf.textContent = ''; }
+function resetTiles() { ['t-speed', 't-batt', 't-limit', 't-mode', 't-throttle', 't-fw'].forEach(id => setTile(id, null)); const inf = $('tempo-info'); if (inf) inf.textContent = ''; }
 function refreshTiles() {
   setTile('t-speed', reg[0x22] != null ? (reg[0x22] * 0.21944).toFixed(0) + ' km/h' : null);
   setTile('t-batt', reg[0x26]);
+  setTile('t-limit', reg[0x1e] != null ? reg[0x1e] + ' km/h' : null);
   setTile('t-mode', reg[0x7e]);
-  setTile('t-limit', reg[0x72] != null ? t(reg[0x72] ? 'valOn' : 'valOff') : null);
+  setTile('t-throttle', reg[0x72] != null ? t(reg[0x72] ? 'valOn' : 'valOff') : null);
   setTile('t-fw', reg[0x4e]);
   updateTempoInfo();
 }
@@ -313,9 +314,10 @@ function charProps(c) { const p = c.properties || {}; return ['read', 'write', '
 async function pickAndConnect() {
   if (!navigator.bluetooth) { log('Web Bluetooth not available. Use Bluefy (iOS) or Chrome/Edge.', 'log-err'); return; }
   try {
-    log('scanning for ' + SCAN_PREFIX + ' (and other advertised names) ...');
-    const filters = [{ namePrefix: SCAN_PREFIX }, { namePrefix: 'M0' }, { namePrefix: 'M1' }, { namePrefix: 'Robot' }];
-    device = await navigator.bluetooth.requestDevice({ filters, optionalServices: ALL_SERVICES });
+    // The Viron models do not share one known advertised name, so the chooser shows all devices
+    // (like the manufacturer app, which scans unfiltered). The service is resolved after connecting.
+    log('opening the device chooser (all Bluetooth devices; pick your scooter, usually named ' + SCAN_PREFIX + ') ...');
+    device = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: ALL_SERVICES });
     log('selected: ' + (device.name || '(no name)') + ' [' + device.id + ']');
     await connectGatt(device);
   } catch (e) { log('scan/connect cancelled: ' + e, 'log-err'); }
@@ -610,7 +612,6 @@ window.addEventListener('DOMContentLoaded', () => {
   { try { const s = localStorage.getItem(LS_STOCK); if (s && $('stock-in')) $('stock-in').value = s; } catch (e) {} }
   { const o = $('open-in'); if (o) o.addEventListener('input', () => { o.dataset.touched = '1'; try { localStorage.setItem(LS_OPEN, o.value); } catch (e) {} }); }
   { const s = $('stock-in'); if (s) s.addEventListener('input', () => { try { localStorage.setItem(LS_STOCK, s.value); } catch (e) {} }); }
-  { const cb = $('expert-toggle'); if (cb) { const apply = () => ['exp-read', 'exp-fine', 'exp-free'].forEach(id => { const el = $(id); if (el) el.hidden = !cb.checked; }); cb.addEventListener('change', apply); apply(); } }
   $('btn-read').addEventListener('click', () => cmdRead(parseHexAddr($('read-addr').value)));
   $('btn-read-caps').addEventListener('click', cmdReadCaps);
   $('btn-max').addEventListener('click', () => cmdMaxSpeed(parseInt($('max-in').value, 10) || 0));

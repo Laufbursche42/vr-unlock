@@ -15,11 +15,11 @@ window.I18N = {
     s1Title: "So fängst du an",
     sub: "Live über Web Bluetooth mit deinem Viron-E-Scooter reden. Läuft in Bluefy (iOS) oder Chrome (Android/Desktop). Nichts verlässt dein Gerät.",
     startHintGuide: "Neu hier? In der <a href=\"GUIDE.de.md\" data-doc=\"GUIDE\" data-t=\"footGuide\">Anleitung</a> steht jeder Schritt.",
-    expWarn: "Machbarkeitsstudie: Diese Seite zeigt, was das Bluetooth-Protokoll eines Viron-E-Scooters technisch möglich macht, sie ist kein fertiges Produkt. Fehlerfreier Betrieb wird nicht versprochen, es gibt keinerlei Gewährleistung. Alles, was du hier tust, tust du auf eigenes Risiko. <a href=\"#\" data-open-disclaimer>Haftungsausschluss lesen</a>.",
+    expWarn: "Machbarkeitsstudie: Diese Seite zeigt, was das Bluetooth-Protokoll eines Viron-E-Scooters technisch möglich macht, sie ist kein fertiges Produkt und an keinem Fahrzeug getestet. Fehlerfreier Betrieb wird nicht versprochen, es gibt keinerlei Gewährleistung. Alles, was du hier tust, tust du auf eigenes Risiko. <a href=\"#\" data-open-disclaimer>Haftungsausschluss lesen</a>.",
     ownDevice: "Nur am eigenen Fahrzeug auf privatem Gelände. Das Anheben der Höchstgeschwindigkeit hebt die Drossel auf, die ABE erlischt und der Betrieb auf öffentlichen Wegen ist dann nicht erlaubt.",
 
     s2Title: "1. Verbinden",
-    connectHint: "Schalte den Scooter ein und halte ihn in der Nähe. Tippe dann auf Verbinden und wähle im Bluetooth-Dialog dein Gerät (der Name beginnt meist mit M0Robot).",
+    connectHint: "Schalte den Scooter ein und halte ihn in der Nähe. Tippe auf Verbinden. Der Bluetooth-Dialog zeigt alle Geräte in Reichweite, weil die Viron-Modelle keinen einheitlichen Namen haben. Such deinen Scooter heraus, der Name beginnt meist mit M0Robot.",
     btnConnect: "Verbinden",
     btnDisconnect: "Trennen",
     controlsHint: "Auf dem iPhone geht das nur mit der App Bluefy, auf Android oder Desktop mit Chrome oder Edge. Nach dem Verbinden kannst du unten das Tempo einstellen.",
@@ -27,8 +27,9 @@ window.I18N = {
     liveTitle: "Werte vom Scooter",
     tileSpeed: "Geschwindigkeit",
     tileBatt: "Akku",
+    tileLimit: "Tempolimit",
     tileMode: "Fahrmodus",
-    tileLimit: "Drossel",
+    tileThrottle: "Drossel",
     tileFw: "Firmware",
     liveHint: "Diese Werte kommen direkt vom Scooter. Nicht jedes Modell liefert jeden Wert, dann steht dort ein Strich. Die Anzeige ist eine Hilfe, kein geeichter Tacho.",
 
@@ -50,8 +51,8 @@ window.I18N = {
     shortcutAndroid: "Android (Chrome): eine Verknüpfung auf dem Startbildschirm auf diese Adresse.",
     shortcutNote: "Beim Öffnen über eine solche Verknüpfung verbindet sich die Seite mit dem zuletzt genutzten Scooter und setzt das Tempo: Sperren auf den gedrosselten Wert, Entsperren auf den offenen. Der Scooter muss an sein und in Reichweite.",
 
-    expertToggle: "Fachfunktionen anzeigen (nur für Kenner)",
-    expertHint: "Hier drunter kommen Werkzeuge für Leute, die das Protokoll verstehen: einzelne Register lesen und schreiben sowie rohe Befehle senden. Wenn dir das nichts sagt, lass den Haken einfach weg, du brauchst es nicht.",
+    expertToggle: "Fachfunktionen (zum Aufklappen antippen)",
+    expertHint: "Hier drunter kommen Werkzeuge für Leute, die das Protokoll verstehen: einzelne Register lesen und schreiben sowie rohe Befehle senden. Wenn dir das nichts sagt, lass die Kachel einfach zu, du brauchst es nicht.",
 
     readTitle: "Register lesen (Diagnose)",
     lblReadAddr: "Registeradresse (hex)",
@@ -125,11 +126,11 @@ window.I18N = {
     s1Title: "Getting started",
     sub: "Talk to your Viron scooter live over Web Bluetooth. Runs in Bluefy (iOS) or Chrome (Android/desktop). Nothing leaves your device.",
     startHintGuide: "New here? Every step is in the <a href=\"GUIDE.en.md\" data-doc=\"GUIDE\" data-t=\"footGuide\">guide</a>.",
-    expWarn: "Feasibility study: this page shows what the Bluetooth protocol of a Viron scooter makes possible, it is not a finished product. Error-free operation is not promised and there is no warranty of any kind. Whatever you do here, you do at your own risk. <a href=\"#\" data-open-disclaimer>Read the disclaimer</a>.",
+    expWarn: "Feasibility study: this page shows what the Bluetooth protocol of a Viron scooter makes possible, it is not a finished product and not tested on any vehicle. Error-free operation is not promised and there is no warranty of any kind. Whatever you do here, you do at your own risk. <a href=\"#\" data-open-disclaimer>Read the disclaimer</a>.",
     ownDevice: "Only on your own vehicle on private ground. Raising the top speed removes the throttle limit, the road approval lapses and operating it on public roads is then not allowed.",
 
     s2Title: "1. Connect",
-    connectHint: "Switch the scooter on and keep it nearby. Then tap Connect and pick your device in the Bluetooth dialog (the name usually starts with M0Robot).",
+    connectHint: "Switch the scooter on and keep it nearby. Tap Connect. The Bluetooth dialog shows all nearby devices because the Viron models do not share one name. Pick your scooter, the name usually starts with M0Robot.",
     btnConnect: "Connect",
     btnDisconnect: "Disconnect",
     controlsHint: "On iPhone this only works with the Bluefy app; on Android or desktop use Chrome or Edge. After connecting you can set the speed below.",
@@ -137,8 +138,9 @@ window.I18N = {
     liveTitle: "Values from the scooter",
     tileSpeed: "Speed",
     tileBatt: "Battery",
+    tileLimit: "Speed limit",
     tileMode: "Ride mode",
-    tileLimit: "Throttle",
+    tileThrottle: "Throttle",
     tileFw: "Firmware",
     liveHint: "These values come straight from the scooter. Not every model provides every value; where it does not, a dash is shown. The display is a help, not a calibrated speedometer.",
 
@@ -160,8 +162,8 @@ window.I18N = {
     shortcutAndroid: "Android (Chrome): a home-screen shortcut pointing at this address.",
     shortcutNote: "Opened through such a shortcut, the page reconnects to the last scooter and sets the speed: lock to the throttled value, unlock to the open one. The scooter has to be on and in range.",
 
-    expertToggle: "Show expert functions (for the technical)",
-    expertHint: "Below are tools for people who understand the protocol: read and write single registers and send raw commands. If this means nothing to you, just leave the box unchecked, you do not need it.",
+    expertToggle: "Expert functions (tap to expand)",
+    expertHint: "Below are tools for people who understand the protocol: read and write single registers and send raw commands. If this means nothing to you, just leave this section collapsed, you do not need it.",
 
     readTitle: "Read register (diagnostics)",
     lblReadAddr: "Register address (hex)",
