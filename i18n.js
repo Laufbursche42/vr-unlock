@@ -51,6 +51,11 @@ window.I18N = {
     shortcutAndroid: "Android (Chrome): eine Verknüpfung auf dem Startbildschirm auf diese Adresse.",
     shortcutNote: "Beim Öffnen über eine solche Verknüpfung verbindet sich die Seite mit dem zuletzt genutzten Scooter und setzt das Tempo: Sperren auf den gedrosselten Wert, Entsperren auf den offenen. Der Scooter muss an sein und in Reichweite.",
 
+    settingsTitle: "3. Weitere Einstellungen",
+    settingsWarn: "Alle Werte gehen ungeprüft direkt an den Scooter, byte-genau wie die Original-App. Manche Funktionen hat nicht jedes Modell. Wenn nichts passiert, kann dein Modell diese Funktion nicht oder nutzt eine andere Variante.",
+    settingsHint: "Diese Befehle stammen aus allen Bedien-Handlern der App (Ghidra). Jeder schreibt genau ein Register mit dem passenden Frame-Typ. Die Wegfahrsperre ist der Diebstahlschutz und hat nichts mit dem Tempo zu tun.",
+    settingsHelp: "Jede Zeile bildet einen Bedien-Handler der App nach: Wegfahrsperre (Diebstahlschutz), elektronische Sperre, Nullstart, Licht, Warnungen, Motortyp, Akkukapazität und die Fahr-Skalen. On/Off-Schalter mit Bit-Bezug lesen den aktuellen Registerwert und setzen nur das eine Bit.",
+
     expertToggle: "Fachfunktionen (zum Aufklappen antippen)",
     expertHint: "Hier drunter kommen Werkzeuge für Leute, die das Protokoll verstehen: einzelne Register lesen und schreiben sowie rohe Befehle senden. Wenn dir das nichts sagt, lass die Kachel einfach zu, du brauchst es nicht.",
 
@@ -160,6 +165,11 @@ window.I18N = {
     shortcutIos: "iOS (Bluefy): add a shortcut pointing at this address.",
     shortcutAndroid: "Android (Chrome): a home-screen shortcut pointing at this address.",
     shortcutNote: "Opened through such a shortcut, the page reconnects to the last scooter and sets the speed: lock to the throttled value, unlock to the open one. The scooter has to be on and in range.",
+
+    settingsTitle: "3. More settings",
+    settingsWarn: "Every value goes straight to the scooter unchecked, byte-exact like the original app. Not every model has every function. If nothing happens, your model cannot do it or uses a different variant.",
+    settingsHint: "These commands come from all the app's UI handlers (Ghidra). Each writes exactly one register with the matching frame type. The immobilizer is the anti-theft lock and has nothing to do with speed.",
+    settingsHelp: "Each row replicates one app handler: immobilizer (anti-theft), electronic lock, zero-start, light, warnings, motor type, battery capacity and the ride scales. On/off switches tied to a bit read the current register value and set only that bit.",
 
     expertToggle: "Expert functions (tap to expand)",
     expertHint: "Below are tools for people who understand the protocol: read and write single registers and send raw commands. If this means nothing to you, just leave this section collapsed, you do not need it.",

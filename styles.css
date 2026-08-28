@@ -191,3 +191,8 @@ details.exp > summary::-webkit-details-marker { display: none; }
 details.exp > summary::before { content: "+"; color: var(--accent); font-size: 15px; line-height: 1; width: 12px; text-align: center; }
 details.exp[open] > summary::before { content: "-"; }
 details.exp .card-head h3 { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 0; font-weight: 700; }
+
+/* Viron: Gruppen-Ueberschrift in der Einstellungen-Karte */
+.set-grp { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent);
+  font-weight: 700; margin: 10px 0 2px; }
+#settings-body .set-row:first-child { margin-top: 0; }

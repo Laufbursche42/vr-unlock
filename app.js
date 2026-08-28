@@ -8,7 +8,7 @@
 
 'use strict';
 
-const BUILD = 'v4';   // logged on load so a tester's log reveals which deployed build is running
+const BUILD = 'v5';   // logged on load so a tester's log reveals which deployed build is running
 
 // --------------------------- hex helpers ---------------------------
 
@@ -118,7 +118,7 @@ function copyLogFallback(text) {
 }
 
 // Help "?" icons: each card can show its explanation in a modal.
-const HELP = { tempo: ['tempoTitle', 'tempoHelp'], read: ['readTitle', 'readHelp'], fine: ['fineTitle', 'fineHelp'], free: ['freeTitle', 'freeHelp'], disclaimer: ['footDisclaimer', 'disclaimerText'] };
+const HELP = { tempo: ['tempoTitle', 'tempoHelp'], settings: ['settingsTitle', 'settingsHelp'], read: ['readTitle', 'readHelp'], fine: ['fineTitle', 'fineHelp'], free: ['freeTitle', 'freeHelp'], disclaimer: ['footDisclaimer', 'disclaimerText'] };
 function openHelp(key) {
   const m = HELP[key]; if (!m) return;
   const dlg = $('help'); if (!dlg) return;
@@ -161,6 +161,7 @@ function setStatus(s) {
 function setControlsEnabled(on) {
   ['open-in', 'stock-in', 'btn-toggle', 'btn-read', 'btn-read-caps', 'btn-max', 'btn-gear', 'btn-cmd', 'btn-raw']
     .forEach(id => { const el = $(id); if (el) el.disabled = !on; });
+  document.querySelectorAll('.setbtn, .setinput').forEach(el => { el.disabled = !on; });
   updateToggleButton();
 }
 function updateToggleButton() {
@@ -277,7 +278,7 @@ async function autoReadConfig() {
   const addrs = [0x7e, 0x82, 0x72, 0x7d, 0x22, 0x26, 0x4e, 0x1d, 0x1e, 0x15, 0xc2, 0xc3, 0xc4, 0xc5, 0xc6, 0xc7];
   log('reading the scooter configuration (' + addrs.length + ' registers) ...');
   for (const a of addrs) { if (!connected) return; await transmit(frameRead(a, 1), 'auto-read 0x' + a.toString(16)); await sleep(90); }
-  setTimeout(updateTempoInfo, 1500);
+  setTimeout(() => { updateTempoInfo(); renderSettings(); }, 1500);
   maybeRunDeepAction();
 }
 function controllerMax() {
@@ -302,6 +303,61 @@ function cmdRaw(hexStr) {
   const bytes = hexToBytes(hexStr);
   if (!bytes.length) { log('raw frame is empty.', 'log-err'); return; }
   transmit(new Uint8Array(bytes), 'raw frame');
+}
+
+// --------------------------- data-driven settings (belegt: all onClick/onTouch handlers) ---------------------------
+// Each row replicates one app handler: register + frame type + value. frame: 'cmd' 0x06, 'cmd2' 0x0A,
+// 'hb' 0x20. kind: 'lockpair' two buttons, 'toggle' on/off full value, 'bit' read-modify-write one bit,
+// 'value' number + write.
+const FRAME_FN = { cmd: frameWriteCmd, cmd2: frameWriteCmd2, hb: frameWriteHB };
+const SETTINGS = [
+  { grp: { de: 'Sicherheit', en: 'Security' }, kind: 'lockpair', de: 'Wegfahrsperre (Diebstahlschutz)', en: 'Immobilizer (anti-theft)', unlock: 0x70, lock: 0x71, frame: 'cmd' },
+  { grp: { de: 'Sicherheit', en: 'Security' }, kind: 'toggle', de: 'Elektronische Sperre', en: 'Electronic lock', reg: 0xf6, frame: 'hb' },
+  { grp: { de: 'Fahren', en: 'Riding' }, kind: 'bit', de: 'Nullstart (LQD)', en: 'Zero-start (LQD)', base: 0x7d, mask: 0x0001, frame: 'hb' },
+  { grp: { de: 'Fahren', en: 'Riding' }, kind: 'value', de: 'Motortyp', en: 'Motor type', reg: 0x6e, frame: 'cmd2' },
+  { grp: { de: 'Fahren', en: 'Riding' }, kind: 'value', de: 'Akkukapazität', en: 'Battery capacity', reg: 0x21, frame: 'hb' },
+  { grp: { de: 'Licht und Warnungen', en: 'Light and warnings' }, kind: 'toggle', de: 'Scheinwerfer', en: 'Headlight', reg: 0xf2, frame: 'hb' },
+  { grp: { de: 'Licht und Warnungen', en: 'Light and warnings' }, kind: 'bit', de: 'Nabenlicht', en: 'Hub light', base: 0xd3, mask: 0x20, frame: 'cmd2' },
+  { grp: { de: 'Licht und Warnungen', en: 'Light and warnings' }, kind: 'bit', de: 'Rückwärts-zu-schnell-Warnung', en: 'Reverse-too-fast warning', base: 0xd3, mask: 0x10, frame: 'cmd2' },
+  { grp: { de: 'Licht und Warnungen', en: 'Light and warnings' }, kind: 'bit', de: 'Sperr-Warnung', en: 'Lock warning', base: 0xd3, mask: 0x08, frame: 'cmd2' },
+  { grp: { de: 'Licht und Warnungen', en: 'Light and warnings' }, kind: 'bit', de: 'Sperre schaltet ab', en: 'Lock shut-down', base: 0xd3, mask: 0x04, frame: 'cmd2' },
+  { grp: { de: 'Skalen', en: 'Scales' }, kind: 'value', de: 'Lenkskala (0..100)', en: 'Turn scale (0..100)', reg: 0xa1, frame: 'cmd2' },
+  { grp: { de: 'Skalen', en: 'Scales' }, kind: 'value', de: 'Fahrskala (0..100)', en: 'Ride scale (0..100)', reg: 0xa2, frame: 'cmd2' },
+];
+function sendSetting(reg, val, frame, label) { transmit(FRAME_FN[frame](reg, val & 0xffff), label, 'reg:' + reg); }
+function settingLabel(s) { return (lang === 'en' ? s.en : s.de); }
+function renderSettings() {
+  const box = $('settings-body'); if (!box) return;
+  box.textContent = '';
+  let lastGrp = null;
+  SETTINGS.forEach((s, i) => {
+    const grp = lang === 'en' ? s.grp.en : s.grp.de;
+    if (grp !== lastGrp) { const h = document.createElement('div'); h.className = 'set-grp'; h.textContent = grp; box.appendChild(h); lastGrp = grp; }
+    const row = document.createElement('div'); row.className = 'set-row';
+    const lab = document.createElement('label'); lab.textContent = settingLabel(s); row.appendChild(lab);
+    if (s.kind === 'value') {
+      const inp = document.createElement('input'); inp.type = 'number'; inp.min = '0'; inp.max = '65535'; inp.value = (reg[s.reg] != null ? reg[s.reg] : 0); inp.className = 'setinput'; inp.disabled = !connected;
+      const b = document.createElement('button'); b.className = 'setbtn'; b.textContent = t('btnWrite'); b.disabled = !connected;
+      b.onclick = () => sendSetting(s.reg, parseInt(inp.value, 10) || 0, s.frame, settingLabel(s) + ' = ' + inp.value + ' (reg 0x' + s.reg.toString(16) + ')');
+      row.appendChild(inp); row.appendChild(b);
+    } else if (s.kind === 'lockpair') {
+      const bu = document.createElement('button'); bu.className = 'setbtn'; bu.textContent = t('btnUnlock'); bu.disabled = !connected;
+      bu.onclick = () => sendSetting(s.unlock, 1, s.frame, settingLabel(s) + ': unlock (reg 0x' + s.unlock.toString(16) + ')');
+      const bl = document.createElement('button'); bl.className = 'setbtn'; bl.textContent = t('btnLock'); bl.disabled = !connected;
+      bl.onclick = () => sendSetting(s.lock, 1, s.frame, settingLabel(s) + ': lock (reg 0x' + s.lock.toString(16) + ')');
+      row.appendChild(bu); row.appendChild(bl);
+    } else {   // toggle or bit -> On/Off
+      const on = document.createElement('button'); on.className = 'setbtn'; on.textContent = t('valOn'); on.disabled = !connected;
+      const off = document.createElement('button'); off.className = 'setbtn'; off.textContent = t('valOff'); off.disabled = !connected;
+      const apply = (state) => {
+        if (s.kind === 'bit') { const cur = reg[s.base] || 0; const v = state ? (cur | s.mask) : (cur & ~s.mask & 0xffff); sendSetting(s.base, v, s.frame, settingLabel(s) + ' ' + (state ? 'on' : 'off') + ' (reg 0x' + s.base.toString(16) + ' bit)'); }
+        else sendSetting(s.reg, state ? 1 : 0, s.frame, settingLabel(s) + ' ' + (state ? 'on' : 'off') + ' (reg 0x' + s.reg.toString(16) + ')');
+      };
+      on.onclick = () => apply(true); off.onclick = () => apply(false);
+      row.appendChild(on); row.appendChild(off);
+    }
+    box.appendChild(row);
+  });
 }
 
 // --------------------------- inbound frames (belegt: Bluetooth::ParseFrame 0x55b9a8) ---------------------------
@@ -467,6 +523,7 @@ function applyLang() {
   document.querySelectorAll('#langs button').forEach(b => { b.setAttribute('aria-pressed', String(b.dataset.lang === lang)); });
   { const el = $('status'); setStatus(el ? el.dataset.state : 'disconnected'); }
   updateToggleButton();
+  renderSettings();
 }
 function initLangSwitch() {
   document.querySelectorAll('#langs button').forEach(b => {
