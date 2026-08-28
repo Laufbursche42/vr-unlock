@@ -85,12 +85,16 @@ Before making this public, be clear about what is and is not certain:
   manufacturer app uses (Nordic UART, AE00, FFE0, two FFF0 sets) and auto-detects them. A model that
   uses a different service cannot work here, and this has not been tested on real hardware. If your
   scooter connects but no known service is found, the log says so; send it in.
-- **The effective speed register is not proven for a specific model.** The write path, the frame and
-  the registers are proven from the binary, and the controller firmware confirms the frame and that
-  the real cap lives in the controller. But which single register actually raises the speed on a given
-  Viron is model-dependent (register `0x7d` is overloaded across models). The Unlock button therefore
-  writes several registers (throttle `0x72` plus the gear limits) as a best effort, not a proven
-  single field. Whether the scooter rides the value only the test on the vehicle shows.
+- **The speed register is model-variant-dependent (fully mapped, but the variant is device-specific).**
+  From the app code (Ghidra) each speed control writes exactly ONE register with one command byte and
+  one value formula; the full table is in [PROTOCOL.md](PROTOCOL.md). Which control a given Viron shows
+  is decided at runtime from the model variant (`0x1840`, set from the model string) and the drive
+  mode. The Unlock button replicates the app's `onTouchLimitSpeed1` path: the km/h value goes to the
+  per-mode limit register (`0xf0` / `0xef` / `0xf1`) via the HB frame (cmd `0x20`), plus the `0x72`
+  limit toggle. That is the common km/h scooter path, not a guess across registers. If your Viron uses
+  a different variant (e.g. the percent-based `0x7d` max-speed path), the expert panel sends those
+  exact frames too. Whether the controller then rides the value only the test on the vehicle shows,
+  because the hard cap lives in the controller firmware.
 - **Some telemetry labels are inferred.** Speed and battery are reasoned from the display code, not
   hard-proven. A real BLE capture would confirm them.
 - **Nothing here is verified on a vehicle.** Raising the speed can take a vehicle out of its approved

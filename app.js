@@ -8,7 +8,7 @@
 
 'use strict';
 
-const BUILD = 'v3';   // logged on load so a tester's log reveals which deployed build is running
+const BUILD = 'v4';   // logged on load so a tester's log reveals which deployed build is running
 
 // --------------------------- hex helpers ---------------------------
 
@@ -27,8 +27,15 @@ function buildFrame(cmd, type, addr, payload) {
   const cks = (~sum) & 0xffff;
   return new Uint8Array([0x55, 0xAA, lenByte, ...body, cks & 0xff, (cks >> 8) & 0xff]);
 }
-// Register write: SendWriteCmd(addr, val16) -> cmd 6, type 3, 2-byte payload (little-endian).
-function frameWrite(addr, val16) { return buildFrame(0x06, 0x03, addr & 0xff, [val16 & 0xff, (val16 >> 8) & 0xff]); }
+// The app has three write-command frames that differ ONLY in the command byte, type is always 0x03,
+// value is a 16-bit little-endian short (belegt in Ghidra):
+//   SendWriteCmd    -> cmd 0x06   (e.g. limit toggle on variant 0, normal-speed 0x73)
+//   SendWriteCmd2   -> cmd 0x0A   (e.g. max speed 0x7d, limit toggle on the common variant)
+//   SendWriteCmd_HB -> cmd 0x20   (e.g. per-mode limit speed 0xf0/0xef/0xf1/0xf3)
+function frameWriteCmd(addr, val)  { return buildFrame(0x06, 0x03, addr & 0xff, [val & 0xff, (val >> 8) & 0xff]); }
+function frameWriteCmd2(addr, val) { return buildFrame(0x0A, 0x03, addr & 0xff, [val & 0xff, (val >> 8) & 0xff]); }
+function frameWriteHB(addr, val)   { return buildFrame(0x20, 0x03, addr & 0xff, [val & 0xff, (val >> 8) & 0xff]); }
+function frameWrite(addr, val)     { return frameWriteCmd(addr, val); }   // alias used by the free command
 // Read request: best-effort (write path is belegt, the read form is inferred). cmd 6, type 1, count.
 function frameRead(addr, count) { return buildFrame(0x06, 0x01, addr & 0xff, [(count || 1) & 0xff]); }
 
@@ -207,15 +214,27 @@ function parseHexAddr(s) { return parseInt(String(s).replace(/^0x/i, ''), 16) & 
 function cmdRead(addr) { transmit(frameRead(addr, 1), 'read 0x' + addr.toString(16), 'reg:' + addr); }
 async function cmdReadCaps() { for (let a = 0xc2; a <= 0xc7; a++) { await transmit(frameRead(a, 1), 'read 0x' + a.toString(16), 'reg:' + a); await new Promise(r => setTimeout(r, 120)); } }
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-const GEAR_REGS = [0x1e, 0xf1, 0xf3];   // km/h-near limits written by the app's LimitSpeed handlers
 
 // --- plain-language speed: two values (open / throttled) and one Unlock/Lock toggle ---
 function clampKmh(v, def) { v = parseInt(v, 10); if (isNaN(v)) v = def; return Math.max(6, Math.min(60, v)); }
 function openVal() { return clampKmh(($('open-in') || {}).value, 25); }
 function stockVal() { return clampKmh(($('stock-in') || {}).value, 20); }
+// The app writes the per-mode limit-speed register (onTouchLimitSpeed1): drive mode 0x7e -> register
+// 0 -> 0xf0, 1 -> 0xef, else -> 0xf1, sent via the HB frame (cmd 0x20). belegt.
+function speedRegForMode() {
+  const mode = reg[0x7e];
+  if (mode === 0) return 0xf0;
+  if (mode === 1) return 0xef;
+  return 0xf1;
+}
 async function applySpeed(kmh, throttleOn) {
-  await transmit(frameWrite(0x72, throttleOn ? 1 : 0), 'throttle ' + (throttleOn ? 'on' : 'off') + ' (reg 0x72)', 'reg:' + 0x72);
-  for (const r of GEAR_REGS) { if (!connected) return; await transmit(frameWrite(r, kmh), 'speed ' + kmh + ' km/h (reg 0x' + r.toString(16) + ')', 'reg:' + r); await sleep(80); }
+  // 1) speed limit on/off, register 0x72 (like onClickLimit; the common variant uses cmd 0x0A)
+  await transmit(frameWriteCmd2(0x72, throttleOn ? 1 : 0), 'limit ' + (throttleOn ? 'on' : 'off') + ' (reg 0x72, cmd 0x0A)', 'reg:' + 0x72);
+  if (!connected) return;
+  await sleep(80);
+  // 2) the km/h value to the per-mode limit-speed register, exactly like the app (HB frame, cmd 0x20)
+  const r = speedRegForMode();
+  await transmit(frameWriteHB(r, kmh), 'speed ' + kmh + ' km/h (reg 0x' + r.toString(16) + ', cmd 0x20)', 'reg:' + r);
 }
 async function doToggle() {
   if (speedUnlocked) { log('lock -> ' + stockVal() + ' km/h', 'log-ok'); await applySpeed(stockVal(), true); speedUnlocked = false; }
@@ -276,9 +295,9 @@ function updateTempoInfo() {
     info.textContent = t('tempoUnknown');
   }
 }
-function cmdMaxSpeed(val) { transmit(frameWrite(0x7d, val & 0xffff), 'max speed ' + val + ' (reg 0x7d)', 'reg:' + 0x7d); }
-function cmdGear(addr, val) { transmit(frameWrite(addr, val & 0xffff), 'gear limit ' + val + ' (reg 0x' + addr.toString(16) + ')', 'reg:' + addr); }
-function cmdFree(addr, val) { transmit(frameWrite(addr, val & 0xffff), 'SendWriteCmd(0x' + addr.toString(16) + ', ' + val + ')', 'reg:' + addr); }
+function cmdMaxSpeed(val) { transmit(frameWriteCmd2(0x7d, val & 0xffff), 'max speed ' + val + ' (reg 0x7d, cmd 0x0A)', 'reg:' + 0x7d); }
+function cmdGear(addr, val) { transmit(frameWriteHB(addr, val & 0xffff), 'limit speed ' + val + ' (reg 0x' + addr.toString(16) + ', cmd 0x20)', 'reg:' + addr); }
+function cmdFree(addr, val) { transmit(frameWriteCmd(addr, val & 0xffff), 'SendWriteCmd(0x' + addr.toString(16) + ', ' + val + ', cmd 0x06)', 'reg:' + addr); }
 function cmdRaw(hexStr) {
   const bytes = hexToBytes(hexStr);
   if (!bytes.length) { log('raw frame is empty.', 'log-err'); return; }
