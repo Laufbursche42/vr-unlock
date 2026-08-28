@@ -681,7 +681,7 @@ function openDocFile(file, anchor, titleKey) {
   fetch(file + '?v=' + BUILD)
     .then(r => { if (!r.ok) throw new Error(r.status + ' ' + r.statusText); return r.text(); })
     .then(txt => { docCache[file] = mdToHtml(txt); show(docCache[file]); })
-    .catch(e => { body.innerHTML = '<p>' + escHtml(t('docFail')) + '</p><pre class="err">' + escHtml(file + ': ' + (e && e.message ? e.message : e)) + '</pre>'; });
+    .catch(e => { body.innerHTML = '<p>' + escHtml(t('docFail')) + '</p><pre class="err">' + escHtml(file + ': ' + (e && e.message ? e.message : e)) + '</pre>'; });   // scan-ok: escaped
 }
 function wireDocViewer() {
   document.addEventListener('click', e => {

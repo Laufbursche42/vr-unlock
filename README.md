@@ -92,6 +92,9 @@ i18n.js      - the German and English string table
 styles.css   - theme and layout
 PROTOCOL.md  - the reverse-engineered BLE protocol reference
 GUIDE.de.md, GUIDE.en.md - the step-by-step guide
+scripts/     - check-i18n.js and security-scan.py (run in CI and the git hooks)
+.github/workflows/ - CI (JS syntax plus security scan) and CodeQL
+.githooks/   - pre-commit and pre-push checks
 ```
 
 ## How it works
@@ -104,6 +107,26 @@ GUIDE.de.md, GUIDE.en.md - the step-by-step guide
 - Incoming cmd6 frames fill a register store that feeds the live tiles.
 - The real speed cap lives in the controller firmware, confirmed in Ghidra on a plaintext controller
   image. The page can raise the limits; whether the scooter rides the value is up to the controller.
+
+## Development
+
+No build step and no dependencies. Edit the files and reload the page. Serve locally, Web Bluetooth
+needs `https` or `localhost`:
+
+```
+python -m http.server 50001
+```
+
+Run the same checks as the CI and the git hooks:
+
+```
+node scripts/check-i18n.js
+python scripts/security-scan.py
+```
+
+Enable the git hooks with `git config core.hooksPath .githooks`. New user-facing strings go into both
+languages in `i18n.js`; `check-i18n.js` fails on a missing or unused key. The security scan blocks
+XSS/injection sinks, inline handlers, external resources and a missing CSP; CodeQL runs on GitHub.
 
 ## Honest limits
 
