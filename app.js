@@ -7,7 +7,7 @@
 
 'use strict';
 
-const BUILD = 'v9';   // logged on load so a tester's log reveals which deployed build is running
+const BUILD = 'v10';   // logged on load so a tester's log reveals which deployed build is running
 
 // --------------------------- hex helpers ---------------------------
 
@@ -396,8 +396,22 @@ const SETTINGS = [
     hde: 'Verteilt die Leistung, bei Doppelantrieb zwischen vorne und hinten. Interner Rohwert.', hen: 'Distributes power, on dual drive between front and rear. Internal raw value.' },
   { grp: { de: 'Feinjustage (Rohwerte)', en: 'Fine tuning (raw values)' }, kind: 'value', de: 'Fahrbalance (roh)', en: 'Ride balance (raw)', reg: 0xfc, frame: 'cmd2',
     hde: 'Balance des Fahrverhaltens als interner Rohwert. Nur für Versuche.', hen: 'Balance of the ride behaviour as an internal raw value. For experiments only.' },
+  { grp: { de: 'Fahrmodus und Verhalten', en: 'Ride mode and behaviour' }, kind: 'select', de: 'Fahrmodus', en: 'Ride mode', reg: 0x7e, frame: 'hb', settle: true,
+    opts: [{ de: 'Eco (0)', en: 'Eco (0)', v: 0 }, { de: 'Normal (1)', en: 'Normal (1)', v: 1 }, { de: 'Sport (2)', en: 'Sport (2)', v: 2 }],
+    hde: 'Der Fahrmodus. Genau wie die App: das Tool schreibt den Modus (SendWriteCmd_HB) und liest ihn nach 0,1 Sekunden zur Bestätigung zurück. Welche Modi dein Modell kennt, siehst du an der Reaktion.', hen: 'The ride mode. Exactly like the app: the tool writes the mode (SendWriteCmd_HB) and reads it back after 0.1 seconds to confirm. Which modes your model has shows in the reaction.' },
+  { grp: { de: 'Fahrmodus und Verhalten', en: 'Ride mode and behaviour' }, kind: 'toggle', de: 'Tempomat', en: 'Cruise control', reg: 0x7c, frame: 'hb', settle: true,
+    hde: 'Tempomat, also eine gehaltene Geschwindigkeit, an oder aus. Wird geschrieben und zur Bestätigung zurückgelesen, wie in der App.', hen: 'Cruise control, meaning a held speed, on or off. Written and read back to confirm, like the app.' },
+  { grp: { de: 'Fahrmodus und Verhalten', en: 'Ride mode and behaviour' }, kind: 'select', de: 'Rekuperation (Bremskraft)', en: 'Recuperation (braking)', reg: 0x7b, frame: 'hb', settle: true,
+    opts: [{ de: 'Schwach (0)', en: 'Weak (0)', v: 0 }, { de: 'Mittel (1)', en: 'Middle (1)', v: 1 }, { de: 'Stark (2)', en: 'Strong (2)', v: 2 }, { de: 'Adaptiv (3)', en: 'Adaptive (3)', v: 3 }],
+    hde: 'Stärke der Motorbremse und Energierückgewinnung beim Loslassen des Gases. Höher = stärkeres Bremsen und mehr Rückgewinnung. Wird geschrieben und zurückgelesen.', hen: 'Strength of the motor braking and energy recovery when you let off the throttle. Higher = stronger braking and more recovery. Written and read back.' },
 ];
-function sendSetting(reg, val, frame, label) { transmit(FRAME_FN[frame](reg, val & 0xffff), label, 'reg:' + reg); }
+// Send one setting. With settle=true it replicates the app's confirm flow: write, then read the same
+// register back after 0.1 s (belegt: onClickDriveType/SetDriveTypeOK/NLHSQD build exactly this
+// SendWriteCmd_HB -> DelayTime(0.1) -> SendReadCmdWithAddr2 sequence).
+function sendSetting(reg, val, frame, label, settle) {
+  transmit(FRAME_FN[frame](reg, val & 0xffff), label, 'reg:' + reg);
+  if (settle) setTimeout(() => { if (connected) transmit(frameRead(reg, 1), 'read-back 0x' + reg.toString(16) + ' (confirm)'); }, 120);
+}
 function settingLabel(s) { return (lang === 'en' ? s.en : s.de); }
 // current on/off state of a setting from the last-read register, or null if unknown
 function settingState(s) {
@@ -432,8 +446,15 @@ function renderSettings() {
       const grp2 = document.createElement('div'); grp2.className = 'vgrp';
       const inp = document.createElement('input'); inp.type = 'number'; inp.min = '0'; inp.max = '65535'; inp.value = (reg[s.reg] != null ? reg[s.reg] : 0); inp.className = 'setinput'; inp.disabled = !connected;
       const b = document.createElement('button'); b.type = 'button'; b.className = 'setbtn wbtn'; b.textContent = t('btnWrite'); b.disabled = !connected;
-      b.onclick = () => sendSetting(s.reg, parseInt(inp.value, 10) || 0, s.frame, settingLabel(s) + ' = ' + inp.value + ' (reg 0x' + s.reg.toString(16) + ')');
+      b.onclick = () => sendSetting(s.reg, parseInt(inp.value, 10) || 0, s.frame, settingLabel(s) + ' = ' + inp.value + ' (reg 0x' + s.reg.toString(16) + ')', s.settle);
       grp2.appendChild(inp); grp2.appendChild(b); row.appendChild(grp2);
+    } else if (s.kind === 'select') {
+      const grp2 = document.createElement('div'); grp2.className = 'vgrp';
+      const sel = document.createElement('select'); sel.className = 'setinput'; sel.disabled = !connected;
+      s.opts.forEach(o => { const op = document.createElement('option'); op.value = o.v; op.textContent = (lang === 'en' ? o.en : o.de); if (reg[s.reg] === o.v) op.selected = true; sel.appendChild(op); });
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'setbtn wbtn'; b.textContent = t('btnWrite'); b.disabled = !connected;
+      b.onclick = () => { const v = parseInt(sel.value, 10) || 0; reg[s.reg] = v; sendSetting(s.reg, v, s.frame, settingLabel(s) + ' = ' + v + ' (reg 0x' + s.reg.toString(16) + ')', s.settle); };
+      grp2.appendChild(sel); grp2.appendChild(b); row.appendChild(grp2);
     } else if (s.kind === 'lockpair') {
       row.appendChild(makeSeg([t('btnUnlock'), t('btnLock')], i => {
         if (i === 0) sendSetting(s.unlock, 1, s.frame, settingLabel(s) + ': unlock (reg 0x' + s.unlock.toString(16) + ')');
@@ -444,8 +465,8 @@ function renderSettings() {
       const active = st === true ? 0 : st === false ? 1 : -1;
       row.appendChild(makeSeg([t('valOn'), t('valOff')], i => {
         const state = (i === 0);
-        if (s.kind === 'bit') { const cur = reg[s.base] || 0; const v = state ? (cur | s.mask) : (cur & ~s.mask & 0xffff); reg[s.base] = v; sendSetting(s.base, v, s.frame, settingLabel(s) + ' ' + (state ? 'on' : 'off') + ' (reg 0x' + s.base.toString(16) + ' bit)'); }
-        else { reg[s.reg] = state ? 1 : 0; sendSetting(s.reg, state ? 1 : 0, s.frame, settingLabel(s) + ' ' + (state ? 'on' : 'off') + ' (reg 0x' + s.reg.toString(16) + ')'); }
+        if (s.kind === 'bit') { const cur = reg[s.base] || 0; const v = state ? (cur | s.mask) : (cur & ~s.mask & 0xffff); reg[s.base] = v; sendSetting(s.base, v, s.frame, settingLabel(s) + ' ' + (state ? 'on' : 'off') + ' (reg 0x' + s.base.toString(16) + ' bit)', s.settle); }
+        else { reg[s.reg] = state ? 1 : 0; sendSetting(s.reg, state ? 1 : 0, s.frame, settingLabel(s) + ' ' + (state ? 'on' : 'off') + ' (reg 0x' + s.reg.toString(16) + ')', s.settle); }
       }, active));
     }
     box.appendChild(row);

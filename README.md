@@ -58,8 +58,15 @@ allows, so you do not have to read anything manually.
   speed.
 - **More settings** where the model exposes them: electronic lock (`0xf6`), zero-start (`0x7d` bit 0),
   headlight (`0xf2`), the warning bits in the collective register `0xd3` (hub light, reverse-too-fast,
-  lock warning, lock shut-down), motor type (`0x6e`), battery capacity (`0x21`) and the turn and ride
-  scales (`0xa1` / `0xa2`). Each command uses the byte-exact frame type of the app.
+  lock warning, lock shut-down), motor type (`0x6e`), battery capacity (`0x21`), the display unit
+  km/h vs mph (`0x1b`, BLE frame cmd `0x21`) and the turn and ride scales (`0xa1` / `0xa2`). Each
+  command uses the byte-exact frame type of the app.
+- **Ride mode, cruise control and recuperation** (`0x7e` / `0x7c` / `0x7b`). The app does not send
+  these with a bare write; it writes them with `SendWriteCmd_HB` (cmd `0x20`) and then, after a 0.1 s
+  delay, reads the same register back to confirm (belegt: `onClickDriveType`,
+  `onClickSetDriveTypeOK`, `onClickNLHSQD` build exactly this write -> DelayTime(0.1) -> read sequence).
+  The tool replicates that flow, so the value is written and then read back; the "?" on each control
+  explains it.
 - **Read the telemetry** the scooter sends back (speed, battery, ride mode, throttle state, firmware),
   and keep the raw notifications in an on-screen diagnostic log as plain hex.
 - **Expert panel** to read any register, write the max-speed value (`0x7d`) or send any raw frame.
