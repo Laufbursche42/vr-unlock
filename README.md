@@ -97,7 +97,6 @@ app.js       - all logic: frame builders (cmd 0x06/0x0A/0x20), transports, conne
                auto-read, the settings table, decode, UI and the diagnostic log
 i18n.js      - the German and English string table
 styles.css   - theme and layout
-PROTOCOL.md  - the reverse-engineered BLE protocol reference
 GUIDE.de.md, GUIDE.en.md - the step-by-step guide
 scripts/     - check-i18n.js and security-scan.py (run in CI and the git hooks)
 .github/workflows/ - CI (JS syntax plus security scan) and CodeQL
@@ -110,7 +109,7 @@ scripts/     - check-i18n.js and security-scan.py (run in CI and the git hooks)
   notifications, then auto-reads the relevant registers.
 - Every write is one of three frames that differ only in the command byte: `SendWriteCmd` (0x06),
   `SendWriteCmd2` (0x0A) and `SendWriteCmd_HB` (0x20). The register, frame type and value formula per
-  control come straight from the app's UI handlers (Ghidra). The full table is in `PROTOCOL.md`.
+  control come straight from the app's UI handlers (Ghidra).
 - Incoming cmd6 frames fill a register store that feeds the live tiles.
 - The real speed cap lives in the controller firmware, confirmed in Ghidra on a plaintext controller
   image. The page can raise the limits; whether the scooter rides the value is up to the controller.
