@@ -271,7 +271,7 @@ async function cmdReadCaps() { for (let a = 0xc2; a <= 0xc7; a++) { await transm
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // --- plain-language speed: two values (open / throttled) and one Unlock/Lock toggle ---
-function clampKmh(v, def) { v = parseInt(v, 10); if (isNaN(v)) v = def; return Math.max(6, Math.min(60, v)); }
+function clampKmh(v, def) { v = parseInt(v, 10); if (isNaN(v)) v = def; return Math.max(6, Math.min(80, v)); }
 function openVal() { return clampKmh(($('open-in') || {}).value, 25); }
 function stockVal() { return clampKmh(($('stock-in') || {}).value, 20); }
 // The app writes the per-mode limit-speed register (onTouchLimitSpeed1): drive mode 0x7e -> register
@@ -356,9 +356,13 @@ async function autoReadConfig() {
   setTimeout(() => { updateTempoInfo(); renderSettings(); }, 1500);
   maybeRunDeepAction();
 }
+// Highest per-mode limit the controller reports, converted from the internal raw value to km/h
+// via the WheelFactor (belegt). Registers 0xc2/0xc4/0xc6 carry raw values, not km/h.
 function controllerMax() {
-  const vals = [reg[0xc2], reg[0xc4], reg[0xc6]].filter(v => typeof v === 'number' && v > 0 && v < 200);
-  return vals.length ? Math.max(...vals) : null;
+  const raws = [reg[0xc2], reg[0xc4], reg[0xc6]].filter(v => typeof v === 'number' && v > 0);
+  if (!raws.length) return null;
+  const kmh = rawToKmh(Math.max(...raws));
+  return (kmh > 0 && kmh < 120) ? kmh : null;
 }
 function updateTempoInfo() {
   const info = $('tempo-info'); if (!info) return;
@@ -366,7 +370,11 @@ function updateTempoInfo() {
   const mx = controllerMax();
   if (mx) {
     info.textContent = t('tempoAllows').replace('%s', mx);
-    const w = $('open-in'); if (w) { w.max = String(Math.max(mx, 60)); if (!w.dataset.touched) w.value = String(mx); }
+    // Prefill both fields with the scooter's own current limit and open the input ceiling for
+    // experimenting above it. Respect a value the user has already touched.
+    const hi = String(Math.max(mx + 20, 60));
+    const w = $('open-in'); if (w) { w.max = hi; if (!w.dataset.touched) w.value = String(mx); }
+    const s = $('stock-in'); if (s) { s.max = hi; if (!s.dataset.touched) s.value = String(mx); }
   } else if (info.textContent !== t('tempoReading')) {
     info.textContent = t('tempoUnknown');
   }
@@ -831,7 +839,7 @@ window.addEventListener('DOMContentLoaded', () => {
   { try { const o = localStorage.getItem(LS_OPEN); if (o && $('open-in')) $('open-in').value = o; } catch (e) {} }
   { try { const s = localStorage.getItem(LS_STOCK); if (s && $('stock-in')) $('stock-in').value = s; } catch (e) {} }
   { const o = $('open-in'); if (o) o.addEventListener('input', () => { o.dataset.touched = '1'; try { localStorage.setItem(LS_OPEN, o.value); } catch (e) {} }); }
-  { const s = $('stock-in'); if (s) s.addEventListener('input', () => { try { localStorage.setItem(LS_STOCK, s.value); } catch (e) {} }); }
+  { const s = $('stock-in'); if (s) s.addEventListener('input', () => { s.dataset.touched = '1'; try { localStorage.setItem(LS_STOCK, s.value); } catch (e) {} }); }
   $('btn-read').addEventListener('click', () => cmdRead(parseHexAddr($('read-addr').value)));
   $('btn-read-caps').addEventListener('click', cmdReadCaps);
   $('btn-max').addEventListener('click', () => cmdMaxSpeed(parseInt($('max-in').value, 10) || 0));
