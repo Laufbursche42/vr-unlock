@@ -154,11 +154,18 @@ function clearLog() {
   log('log cleared');
 }
 function setTile(id, val) { const el = $(id); if (el) el.textContent = (val == null ? '-' : val); }
+// The controller reports its per-mode max limit: mode 1 -> 0xc2, mode 0 -> 0xc4, else -> 0xc6
+// (belegt aus GetSpeedMaxAndMinVal). Shown as km/h via the WheelFactor.
+function limitKmhForMode() {
+  const mode = reg[0x7e];
+  const r = mode === 1 ? 0xc2 : (mode === 0 ? 0xc4 : 0xc6);
+  return reg[r] != null ? rawToKmh(reg[r]) + ' km/h' : null;
+}
 function resetTiles() { ['t-speed', 't-batt', 't-limit', 't-mode', 't-throttle', 't-fw'].forEach(id => setTile(id, null)); const inf = $('tempo-info'); if (inf) inf.textContent = ''; }
 function refreshTiles() {
   setTile('t-speed', reg[0x22] != null ? (reg[0x22] * 0.21944).toFixed(0) + ' km/h' : null);
   setTile('t-batt', reg[0x26]);
-  setTile('t-limit', reg[0x1e] != null ? reg[0x1e] + ' km/h' : null);
+  setTile('t-limit', limitKmhForMode());
   setTile('t-mode', reg[0x7e]);
   setTile('t-throttle', reg[0x72] != null ? t(reg[0x72] ? 'valOn' : 'valOff') : null);
   setTile('t-fw', reg[0x4e]);
@@ -275,14 +282,35 @@ function speedRegForMode() {
   if (mode === 1) return 0xef;
   return 0xf1;
 }
+// belegt aus UserInterface::GetWheelFactor (0x63e59c): km/h = raw * WheelFactor + 0.5.
+// Primaer aus Register 0xee (Radeinstellung), sonst modellabhaengiger Default ueber die Modell-ID
+// (Register 0x1d/0x1e). Ergibt die km/h-pro-Rohwert-Umrechnung des Scooters.
+function wheelFactor() {
+  const ee = reg[0xee];
+  if (ee != null && ee >= 1 && ee <= 0xfffd) return ee / 5794.653;
+  const b = (reg[0x1d] != null ? reg[0x1d] : 0) & 0xff;
+  const hi = reg[0x1e];
+  if (hi != null && hi < 0x100) {
+    if (b === 0x0e) return 0.032193;
+    if ((b & 0xef) === 0x21) return 0.0379665;
+    if (b === 0x20 || b === 0x04) return 0.0348597;
+  }
+  return 0.0396914;
+}
+// Bei Variante 3 (ScooterIII, this[0x1840]==3) rechnet die App km/h in den internen Rohwert um
+// (onTouchLimitSpeed1: iVar6 = kmh / WheelFactor). Andere Varianten schreiben km/h direkt.
+function kmhToRaw(kmh) { return appVariant === 3 ? Math.round(kmh / wheelFactor()) : Math.round(kmh); }
+function rawToKmh(raw) { return appVariant === 3 ? Math.floor(raw * wheelFactor() + 0.5) : raw; }
 async function applySpeed(kmh, throttleOn) {
   // 1) speed limit on/off, register 0x72 (like onClickLimit; frame per detected model variant)
   await transmit(limitFrame(0x72, throttleOn ? 1 : 0), 'limit ' + (throttleOn ? 'on' : 'off') + ' (reg 0x72, variant ' + appVariant + ')', 'reg:' + 0x72);
   if (!connected) return;
   await sleep(80);
-  // 2) the km/h value to the per-mode limit-speed register, exactly like the app (HB frame, cmd 0x20)
+  // 2) the km/h value to the per-mode limit-speed register, exactly like the app (HB frame, cmd 0x20).
+  //    The register carries the internal raw value, not km/h -> convert via WheelFactor (belegt).
   const r = speedRegForMode();
-  await transmit(frameWriteHB(r, kmh), 'speed ' + kmh + ' km/h (reg 0x' + r.toString(16) + ', cmd 0x20)', 'reg:' + r);
+  const raw = kmhToRaw(kmh);
+  await transmit(frameWriteHB(r, raw), 'speed ' + kmh + ' km/h = raw ' + raw + ' (reg 0x' + r.toString(16) + ', cmd 0x20, factor ' + wheelFactor().toFixed(5) + ')', 'reg:' + r);
 }
 async function doToggle() {
   if (speedUnlocked) { log('lock -> ' + stockVal() + ' km/h', 'log-ok'); await applySpeed(stockVal(), true); speedUnlocked = false; }
@@ -322,7 +350,7 @@ async function tryAutoReconnect() {
 // --- automatic read-out on connect: the user does not press "read", the app does it and builds on it ---
 async function autoReadConfig() {
   const info = $('tempo-info'); if (info) info.textContent = t('tempoReading');
-  const addrs = [0x7e, 0x82, 0x72, 0x7d, 0x22, 0x26, 0x4e, 0x1d, 0x1e, 0x15, 0xc2, 0xc3, 0xc4, 0xc5, 0xc6, 0xc7];
+  const addrs = [0x7e, 0x82, 0x72, 0x7d, 0x22, 0x26, 0x4e, 0x1d, 0x1e, 0x15, 0xee, 0xc2, 0xc3, 0xc4, 0xc5, 0xc6, 0xc7, 0xf0, 0xef, 0xf1];
   log('reading the scooter configuration (' + addrs.length + ' registers) ...');
   for (const a of addrs) { if (!connected) return; await transmit(frameRead(a, 1), 'auto-read 0x' + a.toString(16)); await sleep(90); }
   setTimeout(() => { updateTempoInfo(); renderSettings(); }, 1500);
