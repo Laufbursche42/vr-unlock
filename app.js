@@ -7,7 +7,7 @@
 
 'use strict';
 
-const BUILD = 'v12';   // logged on load so a tester's log reveals which deployed build is running
+const BUILD = 'v13';   // logged on load so a tester's log reveals which deployed build is running
 
 // --------------------------- hex helpers ---------------------------
 
@@ -205,6 +205,7 @@ function refreshTiles() {
   setTile('t-throttle', reg[0x72] != null ? t(reg[0x72] ? 'valOn' : 'valOff') : null);
   setTile('t-fw', reg[0x4e]);
   updateTempoInfo();
+  deriveLockState();
   renderAllRegs();
 }
 // Labels for the registers we have identified; unlabeled ones are shown raw.
@@ -256,6 +257,18 @@ function setControlsEnabled(on) {
 function updateToggleButton() {
   const b = $('btn-toggle'); if (!b) return;
   b.textContent = speedUnlocked ? t('btnLock') : t('btnUnlock');
+}
+// Derive the lock/unlock state from the scooter's live report instead of a stale client flag, so a
+// reload/reconnect of an already-unlocked scooter shows "Lock" and the first press really locks.
+// Primary signal: reg 0x72 (the throttle/limit on-off the scooter reports; 0 = limit off = unlocked,
+// 1 = limit on = locked) - exactly the inverse of what applySpeed writes. Fallback: the controller's
+// reported per-mode max (0xc2/0xc4/0xc6) clearly above the 25 km/h default means unlocked. Until one
+// of these is known (config not read yet), leave the flag untouched so we never blind-toggle.
+function deriveLockState() {
+  let known = false;
+  if (reg[0x72] != null) { speedUnlocked = (reg[0x72] === 0); known = true; }
+  else { const mx = controllerMax(); if (mx != null) { speedUnlocked = (mx > 27); known = true; } }
+  if (known) updateToggleButton();
 }
 
 // --------------------------- command acknowledgements ---------------------------
