@@ -7,7 +7,7 @@
 
 'use strict';
 
-const BUILD = 'v10';   // logged on load so a tester's log reveals which deployed build is running
+const BUILD = 'v12';   // logged on load so a tester's log reveals which deployed build is running
 
 // --------------------------- hex helpers ---------------------------
 
@@ -19,9 +19,26 @@ function bytesToHex(b) { return [...b].map(x => x.toString(16).padStart(2, '0').
 // values are 16-bit little-endian; checksum = ~(sum of bytes from the length byte to the last payload
 // byte) & 0xFFFF, little-endian. The controller verifies exactly this (Ghidra FUN_0801e590).
 
+// Two header formats exist, chosen by the model variant (belegt: Bluetooth::SendFramePack 0x55c828).
+// frameTypeB=false -> standard 55 AA header (the vast majority incl. the Viron M0Robot):
+//   55 AA <len+2> cmd type addr payload...  cks_lo cks_hi ; checksum sums the length byte onward.
+// frameTypeB=true  -> 5A A5 header, set for the Plus/miniPLUS family (UI flag [0x1953], native
+//   variant 1). Byte layout 5A A5 <len> 3E cmd type addr payload... cks_lo cks_hi, where <len> is the
+//   raw payload length (NO +2), a fixed 0x3E byte follows, and the checksum sums from <len> through
+//   the last payload byte (so it includes 0x3E). No checksum-XOR (that is variant-3 only). Decoded
+//   byte-for-byte from SendFramePack: header build 0x55c880-0x55c898, sum loop 0x55cb38-0x55cb58.
+let frameTypeB = false;
 function buildFrame(cmd, type, addr, payload) {
-  const body = [cmd & 0xff, type & 0xff, addr & 0xff, ...payload.map(x => x & 0xff)];
-  const lenByte = (payload.length + 2) & 0xff;
+  const p = payload.map(x => x & 0xff);
+  if (frameTypeB) {
+    const lenByte = p.length & 0xff;
+    const body = [0x3e, cmd & 0xff, type & 0xff, addr & 0xff, ...p];
+    let sum = lenByte; for (const b of body) sum = (sum + b) & 0xffff;
+    const cks = (~sum) & 0xffff;
+    return new Uint8Array([0x5A, 0xA5, lenByte, ...body, cks & 0xff, (cks >> 8) & 0xff]);
+  }
+  const body = [cmd & 0xff, type & 0xff, addr & 0xff, ...p];
+  const lenByte = (p.length + 2) & 0xff;
   let sum = lenByte; for (const b of body) sum = (sum + b) & 0xffff;
   const cks = (~sum) & 0xffff;
   return new Uint8Array([0x55, 0xAA, lenByte, ...body, cks & 0xff, (cks >> 8) & 0xff]);
@@ -31,8 +48,11 @@ function buildFrame(cmd, type, addr, payload) {
 //   SendWriteCmd    -> cmd 0x06   (e.g. limit toggle on variant 0, normal-speed 0x73)
 //   SendWriteCmd2   -> cmd 0x0A   (e.g. max speed 0x7d, limit toggle on the common variant)
 //   SendWriteCmd_HB -> cmd 0x20   (e.g. per-mode limit speed 0xf0/0xef/0xf1/0xf3)
+// SendWriteCmd2's command byte is 0x0A by default, but 0x04 when UI flag [0x1953] is set
+// (the Plus/miniPLUS family). belegt: SendWriteCmd2 0x55dd0c (csel 0x0A vs 0x04 on the 0x1953 flag).
+let cmd2Byte = 0x0A;
 function frameWriteCmd(addr, val)  { return buildFrame(0x06, 0x03, addr & 0xff, [val & 0xff, (val >> 8) & 0xff]); }
-function frameWriteCmd2(addr, val) { return buildFrame(0x0A, 0x03, addr & 0xff, [val & 0xff, (val >> 8) & 0xff]); }
+function frameWriteCmd2(addr, val) { return buildFrame(cmd2Byte, 0x03, addr & 0xff, [val & 0xff, (val >> 8) & 0xff]); }
 function frameWriteHB(addr, val)   { return buildFrame(0x20, 0x03, addr & 0xff, [val & 0xff, (val >> 8) & 0xff]); }
 function frameWriteBLE(addr, val)  { return buildFrame(0x21, 0x03, addr & 0xff, [val & 0xff, (val >> 8) & 0xff]); }   // SendWriteCmd_BLE (unit, password)
 function frameWrite(addr, val)     { return frameWriteCmd(addr, val); }   // alias used by the free command
@@ -41,10 +61,21 @@ function frameWrite(addr, val)     { return frameWriteCmd(addr, val); }   // ali
 // SetAppType(bluetoothDevice.getName()); native UserInterface::SetAppType parses that name). Variant 0
 // ("M6") uses SendWriteCmd (0x06) for the limit toggle; every other variant (incl. "M0Robot" -> 3)
 // uses SendWriteCmd2 (0x0A). Only the 0-vs-not-0 split matters for the frames the tool sends.
+// Map the advertised device name to the native frame variant (belegt: UserInterface::SetAppType
+// 0x527278, decision tree 0x52758c-0x527c74). What actually changes the bytes on the wire:
+//   variant 0 ("M6")            -> limit toggle via SendWriteCmd (0x06), 55 AA header
+//   variant 1 miniPLUS_/Plus    -> sets flag [0x1953]: 5A A5 header AND SendWriteCmd2 cmd -> 0x04
+//   variant 4 ("GoKart")        -> separate GoKart channel, not a throttle-limited scooter (not built)
+//   everything else incl. M0Robot -> variant 3, 55 AA header, SendWriteCmd2 cmd 0x0A
+// Variants 1 (without 0x1953), 2 and 3 are frame-identical for the limit register, so only the
+// 0-vs-Plus-vs-rest split changes the emitted frame.
 let appVariant = 3;
 function detectVariant(name) {
   const n = name || '';
+  frameTypeB = false; cmd2Byte = 0x0A;
   if (n.indexOf('M6') !== -1) return 0;
+  if (n.indexOf('miniPLUS_') !== -1 || n.indexOf('Plus') !== -1) { frameTypeB = true; cmd2Byte = 0x04; return 1; }
+  if (n.indexOf('GoKart') !== -1) return 4;
   return 3;   // default, matches "M0Robot" and most scooter names
 }
 function limitFrame(reg, val) { return appVariant === 0 ? frameWriteCmd(reg, val) : frameWriteCmd2(reg, val); }
@@ -65,8 +96,12 @@ const TRANSPORTS = {
   ffe0:   { name: 'FFE0/FFF3',   service: '0000ffe0-0000-1000-8000-00805f9b34fb', write: '0000fff3-0000-1000-8000-00805f9b34fb', notify: '0000fff4-0000-1000-8000-00805f9b34fb' },
   fff0a:  { name: 'FFF0/FFF3',   service: '0000fff0-0000-1000-8000-00805f9b34fb', write: '0000fff3-0000-1000-8000-00805f9b34fb', notify: '0000fff7-0000-1000-8000-00805f9b34fb' },
   fff0b:  { name: 'FFF0/FFF2',   service: '0000fff0-0000-1000-8000-00805f9b34fb', write: '0000fff2-0000-1000-8000-00805f9b34fb', notify: '0000fff1-0000-1000-8000-00805f9b34fb' },
+  // HM-10 single characteristic: write and notify on the same FFE1 char. This is the app's
+  // small-type path (BluetoothHolder UUID_SERVICE 0xffe0 / UUID_NOTIFY 0xffe1, _isSmallType 0,
+  // the "M6" family). Tried last so the multi-characteristic FFE0 layout above wins when present.
+  ffe1:   { name: 'FFE0/FFE1',   service: '0000ffe0-0000-1000-8000-00805f9b34fb', write: '0000ffe1-0000-1000-8000-00805f9b34fb', notify: '0000ffe1-0000-1000-8000-00805f9b34fb' },
 };
-const TRANSPORT_ORDER = ['nordic', 'ae00', 'ffe0', 'fff0a', 'fff0b'];
+const TRANSPORT_ORDER = ['nordic', 'ae00', 'ffe0', 'fff0a', 'fff0b', 'ffe1'];
 const ALL_SERVICES = [...new Set(TRANSPORT_ORDER.map(k => TRANSPORTS[k].service))];
 const SCAN_PREFIX = 'M0Robot';   // the Viron advertises with this name part (Fremdbericht)
 
@@ -609,7 +644,11 @@ async function connectGatt(dev) {
     log('transport ' + usedTransport.name + '  service ' + usedTransport.service, 'log-ok');
     log('char  write=' + writeChar.uuid + '  notify=' + notifyChar.uuid, 'log-ok');
     appVariant = detectVariant(device.name);
-    log('model variant from name "' + (device.name || '') + '": ' + appVariant + (appVariant === 0 ? ' (M6 family, limit via cmd 0x06)' : ' (limit via cmd 0x0A)'), 'log-ok');
+    const vnote = appVariant === 0 ? ' (M6 family, limit via cmd 0x06, 55 AA)'
+      : appVariant === 1 ? ' (Plus/miniPLUS family, 5A A5 header, limit via cmd 0x04)'
+      : appVariant === 4 ? ' (GoKart: different command channel, the speed/zero-start/cruise controls below do NOT apply - use the expert raw-frame panel)'
+      : ' (limit via cmd 0x0A, 55 AA)';
+    log('model variant from name "' + (device.name || '') + '": ' + appVariant + vnote, appVariant === 4 ? 'log-err' : 'log-ok');
     autoReadConfig();
   } catch (e) {
     setStatus('disconnected');

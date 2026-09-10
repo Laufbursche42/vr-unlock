@@ -41,8 +41,8 @@ connecting to the first send.
 The Viron models do not share one advertised name, so the page opens the chooser with all nearby
 Bluetooth devices, exactly like the manufacturer app, which scans unfiltered. Pick your scooter (the
 name usually starts with `M0Robot`). After connecting, the page finds the right GATT service by itself:
-it supports the five transports the app uses (Nordic UART plus the AE00, FFE0 and two FFF0 sets) and
-picks whichever one the scooter exposes.
+it supports the six transports the app uses (Nordic UART, the AE00, FFE0 and two FFF0 sets, plus the
+HM-10 FFE0/FFE1 single-characteristic layout) and picks whichever one the scooter exposes.
 
 Right after connecting the page reads the scooter's settings on its own and shows what the controller
 allows, so you do not have to read anything manually.
@@ -105,7 +105,7 @@ scripts/     - check-i18n.js and security-scan.py (run in CI and the git hooks)
 
 ## How it works
 
-- On connect the page resolves the GATT service among the five known transports and starts
+- On connect the page resolves the GATT service among the six known transports and starts
   notifications, then auto-reads the relevant registers.
 - Every write is one of three frames that differ only in the command byte: `SendWriteCmd` (0x06),
   `SendWriteCmd2` (0x0A) and `SendWriteCmd_HB` (0x20). The register, frame type and value formula per
@@ -136,9 +136,17 @@ XSS/injection sinks, inline handlers, external resources and a missing CSP; Code
 
 ## Honest limits
 
-- **Not every model is guaranteed to connect.** The five supported transports cover every model the
-  app supports, and the chooser shows all devices, but this is not verified on real hardware and a
+- **Not every model is guaranteed to connect.** The six supported transports cover every GATT layout
+  the app uses, and the chooser shows all devices, but this is not verified on real hardware and a
   model with a different service cannot work here.
+- **All e-scooter families are covered, including Plus / miniPLUS.** Most models use the standard
+  `55 AA` frame. The Plus / miniPLUS family (PlusRobot) uses a `5A A5` header with command byte `0x04`;
+  that format was decoded byte for byte from `SendFramePack` and the page switches to it automatically
+  when the device name says `Plus` or `miniPLUS_`, so speed, zero-start and cruise work there too.
+- **GoKart is out of scope.** The GoKart line is a different product with its own command channel
+  (command byte `0x07`, lock and mode registers instead of a throttle limit). The page connects and
+  says so in the log, but offers no GoKart controls; the expert raw-frame panel can still send
+  arbitrary frames. The full per-model breakdown is documented alongside the protocol analysis.
 - **The effective speed register is model-variant-dependent.** Which control a given Viron uses is
   decided at runtime from the model variant (set from the model string) and the drive mode. The Unlock
   button uses the common per-mode path; the expert panel reaches the other registers with their exact
