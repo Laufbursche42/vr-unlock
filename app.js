@@ -7,7 +7,7 @@
 
 'use strict';
 
-const BUILD = 'v13';   // logged on load so a tester's log reveals which deployed build is running
+const BUILD = 'v16';   // logged on load so a tester's log reveals which deployed build is running
 
 // --------------------------- hex helpers ---------------------------
 
