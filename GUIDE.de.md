@@ -4,6 +4,8 @@ Diese Anleitung führt dich Schritt für Schritt durch das Viron Tool: verbinden
 Speed-Register schreiben und die Live-Werte deuten. Alles läuft lokal zwischen deinem Browser und dem
 Scooter, nichts geht an einen Server.
 
+> **Wichtig für Fehler-Reports:** Schalte unten auf der Seite den **Diagnose-Log** ein, *bevor* du dich mit dem Scooter verbindest. Nur dann wird der komplette Verbindungsaufbau mitgeschnitten - und genau diese Zeilen brauchen wir in einem [Ticket](https://github.com/Laufbursche42/Laufbursche42/issues), um ein Problem nachzuvollziehen.
+
 ## Voraussetzungen
 
 - Einen Browser mit Web Bluetooth: auf Android oder Desktop Chrome oder Edge, auf dem iPhone die App
@@ -71,3 +73,6 @@ kommen, darüber hinaus hilft nur eine Firmware-Änderung.
 Das Anheben der Höchstgeschwindigkeit hebt die Drossel auf. Die ABE erlischt und der Betrieb auf
 öffentlichen Wegen ist dann nicht erlaubt. Alles gilt nur für das eigene Gerät auf privatem Gelände
 sowie auf eigenes Risiko.
+
+## Mithelfen
+Willst du herausfinden, ob und wie Tuning bei deinem Scooter geht? Teste dieses Tool an deinem eigenen Fahrzeug und öffne ein Ticket auf [GitHub](https://github.com/Laufbursche42/Laufbursche42/issues) - mit deinem Modell und was funktioniert hat (oder nicht). So finden wir gemeinsam heraus, was bei welchem Modell möglich ist.

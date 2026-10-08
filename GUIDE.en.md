@@ -4,6 +4,8 @@ This guide walks you through the Viron Tool step by step: connect, read register
 registers and read the live values. Everything runs locally between your browser and the scooter,
 nothing goes to a server.
 
+> **Important for error reports:** switch on the **Diagnostic log** at the bottom of the page *before* you connect to the scooter. Only then is the full connection handshake captured - and those are exactly the lines we need in a [ticket](https://github.com/Laufbursche42/Laufbursche42/issues) to reproduce a problem.
+
 ## Requirements
 
 - A browser with Web Bluetooth: Chrome or Edge on Android/desktop, the Bluefy app on iPhone. Safari
@@ -64,3 +66,6 @@ firmware. A BLE tool can reach that internal limit; beyond it only a firmware ch
 
 Raising the top speed removes the throttle limit. The road approval lapses and riding on public roads
 is then not allowed. Everything is only for your own device on private ground and at your own risk.
+
+## Contribute
+Want to find out if and how tuning works on your scooter? Test this tool on your own vehicle and open a ticket on [GitHub](https://github.com/Laufbursche42/Laufbursche42/issues) - with your model and what worked (or did not). That way we figure out together what is possible on which model.

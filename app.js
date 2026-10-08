@@ -7,7 +7,7 @@
 
 'use strict';
 
-const BUILD = 'v16';   // logged on load so a tester's log reveals which deployed build is running
+const BUILD = 'v17';   // logged on load so a tester's log reveals which deployed build is running
 
 // --------------------------- hex helpers ---------------------------
 
@@ -119,13 +119,8 @@ const reg = {};   // last seen register store: dec register -> 16-bit value
 function $(id) { return document.getElementById(id); }
 
 const logLines = [];
-function ts() {
-  const d = new Date();
-  const p = (n, w) => String(n).padStart(w || 2, '0');
-  return p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds()) + '.' + p(d.getMilliseconds(), 3);
-}
 function log(m, cls) {
-  const line = '[' + ts() + '] ' + m;
+  const line = '[' + new Date().toTimeString().slice(0, 8) + '] ' + m;
   logLines.push(line);
   const el = $('log'); if (!el) return;
   const span = document.createElement('div');
@@ -138,11 +133,11 @@ function logDiagnosticHeader() {
   log('=== vr-unlock diagnostic ===');
   log('build: ' + BUILD);
   log('time: ' + new Date().toISOString());
-  log('userAgent: ' + (nav.userAgent || '(unknown)'));
-  log('platform: ' + (nav.platform || '(unknown)'));
+  log('userAgent: ' + (nav.userAgent || '?'));
+  log('platform: ' + (nav.platform || '?'));
   log('webBluetooth: ' + (nav.bluetooth ? 'yes' : 'no'));
-  log('frame self-test (limit off = 55 AA 04 06 03 72 00 00 80 FF): ' + (FRAME_OK ? 'OK' : 'FAILED'), FRAME_OK ? 'log-ok' : 'log-err');
-  log('============================');
+  log('protocol self-test: ' + (FRAME_OK ? 'OK' : 'FAILED'));
+  log('================================');
 }
 async function copyLog() {
   const text = logLines.join('\n');
@@ -188,6 +183,17 @@ function clearLog() {
   logDiagnosticHeader();
   log('log cleared');
 }
+function saveLog() {
+  try {
+    const nl = (navigator.platform || '').toLowerCase().indexOf('win') === 0 ? '\r\n' : '\n';
+    const blob = new Blob([logLines.join(nl)], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'laufbursche42-vr-log.txt';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    log('log saved', 'log-ok');
+  } catch (e) { log('save failed: ' + (e && e.message ? e.message : e), 'log-err'); }
+}
 function setTile(id, val) { const el = $(id); if (el) el.textContent = (val == null ? '-' : val); }
 // The controller reports its per-mode max limit: mode 1 -> 0xc2, mode 0 -> 0xc4, else -> 0xc6
 // (belegt aus GetSpeedMaxAndMinVal). Shown as km/h via the WheelFactor.
@@ -196,7 +202,19 @@ function limitKmhForMode() {
   const r = mode === 1 ? 0xc2 : (mode === 0 ? 0xc4 : 0xc6);
   return reg[r] != null ? rawToKmh(reg[r]) + ' km/h' : null;
 }
-function resetTiles() { ['t-speed', 't-batt', 't-limit', 't-mode', 't-throttle', 't-fw'].forEach(id => setTile(id, null)); const inf = $('tempo-info'); if (inf) inf.textContent = ''; }
+function resetTiles() { ['t-speed', 't-batt', 't-limit', 't-mode', 't-throttle', 't-fw', 't-build', 't-model'].forEach(id => setTile(id, null)); const inf = $('tempo-info'); if (inf) inf.textContent = ''; }
+// Model/device id = reg 0x1d (low) | reg 0x1e (high) << 16 (belegt: FULL TELEMETRY "Model / device ID").
+function modelIdHex() {
+  if (reg[0x1d] == null && reg[0x1e] == null) return null;
+  const v = ((((reg[0x1e] || 0) & 0xffff) << 16) | ((reg[0x1d] || 0) & 0xffff)) >>> 0;
+  return '0x' + v.toString(16).toUpperCase().padStart(8, '0');
+}
+// Build/patch number = reg 0x4f (low) | reg 0x50 (high) << 16 (belegt: FULL TELEMETRY "Build / patch number").
+function buildNumber() {
+  if (reg[0x4f] == null && reg[0x50] == null) return null;
+  const v = ((((reg[0x50] || 0) & 0xffff) << 16) | ((reg[0x4f] || 0) & 0xffff)) >>> 0;
+  return String(v);
+}
 function refreshTiles() {
   setTile('t-speed', reg[0x22] != null ? (reg[0x22] * 0.21944).toFixed(0) + ' km/h' : null);
   setTile('t-batt', reg[0x26]);
@@ -204,6 +222,8 @@ function refreshTiles() {
   setTile('t-mode', reg[0x7e]);
   setTile('t-throttle', reg[0x72] != null ? t(reg[0x72] ? 'valOn' : 'valOff') : null);
   setTile('t-fw', reg[0x4e]);
+  setTile('t-build', buildNumber());
+  setTile('t-model', modelIdHex());
   updateTempoInfo();
   deriveLockState();
   renderAllRegs();
@@ -212,7 +232,8 @@ function refreshTiles() {
 const REG_LABELS = {
   0x1b: { de: 'Einheit', en: 'Unit' }, 0x1d: { de: 'Modell-ID', en: 'Model id' }, 0x1e: { de: 'Tempolimit', en: 'Speed limit' },
   0x1f: { de: 'Info-Seite', en: 'Info page' }, 0x21: { de: 'Akkukapazität', en: 'Battery capacity' }, 0x22: { de: 'Geschwindigkeit', en: 'Speed' },
-  0x26: { de: 'Akku', en: 'Battery' }, 0x4e: { de: 'Firmware', en: 'Firmware' }, 0x62: { de: 'Winkel', en: 'Angle' },
+  0x26: { de: 'Akku', en: 'Battery' }, 0x4e: { de: 'Firmware', en: 'Firmware' }, 0x4f: { de: 'Build (low)', en: 'Build (low)' }, 0x50: { de: 'Build (high)', en: 'Build (high)' }, 0x62: { de: 'Winkel', en: 'Angle' },
+  0x7f: { de: 'Sperre Variante 4', en: 'Lock variant 4' },
   0x6e: { de: 'Motortyp', en: 'Motor type' }, 0x72: { de: 'Drossel', en: 'Throttle' }, 0x73: { de: 'Normaltempo', en: 'Normal speed' },
   0x74: { de: 'Schiebehilfe', en: 'Push assist' }, 0x7b: { de: 'Rekuperation', en: 'Recuperation' }, 0x7c: { de: 'Tempomat', en: 'Cruise' },
   0x7d: { de: 'MaxSpeed (roh)', en: 'MaxSpeed (raw)' }, 0x7e: { de: 'Fahrmodus', en: 'Ride mode' }, 0x82: { de: 'Modus-Konfig', en: 'Mode config' },
@@ -249,6 +270,8 @@ function setStatus(s) {
   }
 }
 function setControlsEnabled(on) {
+  // telemetry + settings cards hidden until connected; on load only intro/connect/log show
+  ['live-card', 'batt-card', 'more-card', 'raw-card'].forEach(id => { const el = $(id); if (el) el.hidden = !on; });
   ['open-in', 'stock-in', 'btn-toggle', 'btn-read', 'btn-read-caps', 'btn-max', 'btn-gear', 'btn-cmd', 'btn-raw']
     .forEach(id => { const el = $(id); if (el) el.disabled = !on; });
   document.querySelectorAll('.setbtn, .setinput').forEach(el => { el.disabled = !on; });
@@ -398,7 +421,7 @@ async function tryAutoReconnect() {
 // --- automatic read-out on connect: the user does not press "read", the app does it and builds on it ---
 async function autoReadConfig() {
   const info = $('tempo-info'); if (info) info.textContent = t('tempoReading');
-  const addrs = [0x7e, 0x82, 0x72, 0x7d, 0x22, 0x26, 0x4e, 0x1d, 0x1e, 0x15, 0xee, 0xc2, 0xc3, 0xc4, 0xc5, 0xc6, 0xc7, 0xf0, 0xef, 0xf1];
+  const addrs = [0x7e, 0x82, 0x72, 0x7d, 0x22, 0x26, 0x4e, 0x4f, 0x50, 0x1d, 0x1e, 0x15, 0xee, 0xc2, 0xc3, 0xc4, 0xc5, 0xc6, 0xc7, 0xf0, 0xef, 0xf1];
   log('reading the scooter configuration (' + addrs.length + ' registers) ...');
   for (const a of addrs) { if (!connected) return; await transmit(frameRead(a, 1), 'auto-read 0x' + a.toString(16)); await sleep(90); }
   setTimeout(() => { updateTempoInfo(); renderSettings(); }, 1500);
@@ -446,6 +469,8 @@ const SETTINGS = [
     hde: 'Der Diebstahlschutz. Sperren blockiert das Anfahren, Entsperren gibt den Scooter wieder frei. Das hat nichts mit dem Tempo zu tun.', hen: 'The anti-theft lock. Lock blocks moving off, Unlock releases the scooter again. This has nothing to do with speed.' },
   { grp: { de: 'Sicherheit', en: 'Security' }, kind: 'toggle', de: 'Elektronische Sperre', en: 'Electronic lock', reg: 0xf6, frame: 'hb',
     hde: 'Eine zusätzliche elektronische Sperre, die manche Modelle haben. An blockiert, Aus gibt frei.', hen: 'An extra electronic lock some models have. On blocks, Off releases.' },
+  { grp: { de: 'Sicherheit', en: 'Security' }, kind: 'toggle', de: 'Sperre (Variante 4)', en: 'Lock (variant 4)', reg: 0x7f, frame: 'hb',
+    hde: 'Eine weitere Sperr-Variante (onClickLock4), die manche Modelle statt der elektronischen Sperre nutzen. An blockiert, Aus gibt frei. Kennt dein Modell sie nicht, passiert nichts.', hen: 'Another lock variant (onClickLock4) that some models use instead of the electronic lock. On blocks, Off releases. If your model does not know it, nothing happens.' },
   { grp: { de: 'Fahren', en: 'Riding' }, kind: 'bit', de: 'Nullstart', en: 'Zero-start', base: 0x7d, mask: 0x0001, frame: 'hb',
     hde: 'An: der Motor zieht erst ab Schritttempo an, du musst kurz anschieben (gesetzlich vorgeschrieben). Aus: der Motor zieht aus dem Stand an.', hen: 'On: the motor only engages above walking pace, you have to kick off first (legally required). Off: the motor pulls from standstill.' },
   { grp: { de: 'Fahren', en: 'Riding' }, kind: 'value', de: 'Motortyp', en: 'Motor type', reg: 0x6e, frame: 'cmd2',
@@ -480,6 +505,8 @@ const SETTINGS = [
     hde: 'Verteilt die Leistung, bei Doppelantrieb zwischen vorne und hinten. Interner Rohwert.', hen: 'Distributes power, on dual drive between front and rear. Internal raw value.' },
   { grp: { de: 'Feinjustage (Rohwerte)', en: 'Fine tuning (raw values)' }, kind: 'value', de: 'Fahrbalance (roh)', en: 'Ride balance (raw)', reg: 0xfc, frame: 'cmd2',
     hde: 'Balance des Fahrverhaltens als interner Rohwert. Nur für Versuche.', hen: 'Balance of the ride behaviour as an internal raw value. For experiments only.' },
+  { grp: { de: 'Feinjustage (Rohwerte)', en: 'Fine tuning (raw values)' }, kind: 'value', de: 'Ton-Pegel (roh)', en: 'Sound level (raw)', reg: 0xa4, frame: 'cmd2',
+    hde: 'Der Ton- beziehungsweise Signalpegel als interner Rohwert (onTouchSetSound, Register 0xa4). Die App legt intern noch 100 drauf, hier geht der rohe Wert direkt raus. Klein anfangen und testen.', hen: 'The sound or beep level as an internal raw value (onTouchSetSound, register 0xa4). The app adds 100 internally; here the raw value goes out directly. Start small and test.' },
   { grp: { de: 'Fahrmodus und Verhalten', en: 'Ride mode and behaviour' }, kind: 'select', de: 'Fahrmodus', en: 'Ride mode', reg: 0x7e, frame: 'hb', settle: true,
     opts: [{ de: 'Eco (0)', en: 'Eco (0)', v: 0 }, { de: 'Normal (1)', en: 'Normal (1)', v: 1 }, { de: 'Sport (2)', en: 'Sport (2)', v: 2 }],
     hde: 'Der Fahrmodus. Genau wie die App: das Tool schreibt den Modus (SendWriteCmd_HB) und liest ihn nach 0,1 Sekunden zur Bestätigung zurück. Welche Modi dein Modell kennt, siehst du an der Reaktion.', hen: 'The ride mode. Exactly like the app: the tool writes the mode (SendWriteCmd_HB) and reads it back after 0.1 seconds to confirm. Which modes your model has shows in the reaction.' },
@@ -593,30 +620,6 @@ async function pickAndConnect() {
     log('selected: ' + (device.name || '(no name)') + ' [' + device.id + ']');
     await connectGatt(device);
   } catch (e) { log('scan/connect cancelled: ' + e, 'log-err'); }
-}
-
-async function scanAllDevicesDiagnostic() {
-  if (!navigator.bluetooth) { log('Web Bluetooth not available. Use Bluefy (iOS) or Chrome (Android/desktop).', 'log-err'); return; }
-  let dev = null;
-  try {
-    log('DIAG: showing ALL Bluetooth devices. Pick your scooter, even if the name looks wrong or missing.', 'log-ok');
-    dev = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: ALL_SERVICES });
-  } catch (e) { log('DIAG cancelled: ' + e, 'log-err'); return; }
-  log('DIAG selected: name="' + (dev.name || '(no name)') + '"  id=' + dev.id);
-  try {
-    log('DIAG: connecting to read the GATT services ...');
-    const srv = await dev.gatt.connect();
-    let svcs = [];
-    try { svcs = await srv.getPrimaryServices(); } catch (e) { log('DIAG getPrimaryServices error: ' + e, 'log-err'); }
-    if (!svcs || !svcs.length) { log('DIAG: none of the known services is present (Nordic 6E40.., AE00, FFE0, FFF0).', 'log-err'); }
-    else for (const s of svcs) {
-      log('DIAG service ' + s.uuid, 'log-ok');
-      try { const chs = await s.getCharacteristics(); for (const c of chs) log('DIAG   char ' + c.uuid + '  [' + charProps(c) + ']'); }
-      catch (e) { log('DIAG   (characteristics unreadable: ' + e + ')'); }
-    }
-    try { dev.gatt.disconnect(); } catch (e) {}
-    log('DIAG done. Copy the log and send it. For the full picture use nRF Connect on Android.', 'log-ok');
-  } catch (e) { log('DIAG connect failed: ' + e, 'log-err'); }
 }
 
 async function resolveService(srv) {
@@ -741,7 +744,7 @@ function applyTheme(dark) {
   document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
   const b = $('btn-theme');
   if (b) {
-    b.innerHTML = dark ? '&#9728;' : '&#9790;';   // scan-ok: a fixed character, not user input
+    b.textContent = dark ? '\u2600' : '\u263E';
     b.setAttribute('aria-label', t(dark ? 'themeToLight' : 'themeToDark'));
     b.title = b.getAttribute('aria-label');
   }
@@ -899,7 +902,7 @@ window.addEventListener('DOMContentLoaded', () => {
   $('btn-cmd').addEventListener('click', () => cmdFree(parseHexAddr($('cmd-addr').value), parseInt($('cmd-val').value, 10) || 0));
   $('btn-raw').addEventListener('click', () => cmdRaw($('raw-hex').value));
   { const b = $('btn-copy-log'); if (b) b.addEventListener('click', copyLog); }
-  { const b = $('btn-diag'); if (b) b.addEventListener('click', scanAllDevicesDiagnostic); }
+  { const b = $('btn-save-log'); if (b) b.addEventListener('click', saveLog); }
   { const b = $('btn-clear-log'); if (b) b.addEventListener('click', clearLog); }
 
   setControlsEnabled(false);
