@@ -7,7 +7,7 @@
 
 'use strict';
 
-const BUILD = 'v19';   // logged on load so a tester's log reveals which deployed build is running
+const BUILD = 'v20';   // logged on load so a tester's log reveals which deployed build is running
 
 // --------------------------- hex helpers ---------------------------
 
@@ -160,7 +160,7 @@ function copyLogFallback(text) {
 }
 
 // Help "?" icons: each card can show its explanation in a modal.
-const HELP = { tempo: ['tempoTitle', 'tempoHelp'], settings: ['settingsTitle', 'settingsHelp'], read: ['readTitle', 'readHelp'], fine: ['fineTitle', 'fineHelp'], free: ['freeTitle', 'freeHelp'], disclaimer: ['footDisclaimer', 'disclaimerText'] };
+const HELP = { tempo: ['tempoTitle', 'tempoHelp'], settings: ['settingsTitle', 'settingsHelp'], read: ['readTitle', 'readHelp'], fine: ['fineTitle', 'fineHelp'], free: ['freeTitle', 'freeHelp'] };
 function openHelp(key) {
   const m = HELP[key]; if (!m) return;
   const dlg = $('help'); if (!dlg) return;
@@ -864,7 +864,7 @@ function wireDocViewer() {
       return;
     }
     const disc = e.target.closest('[data-open-disclaimer]');
-    if (disc) { e.preventDefault(); openHelp('disclaimer'); return; }
+    if (disc) { e.preventDefault(); openDocFile(docFile('DISCLAIMER'), 'footDisclaimer'); return; }
     const a = e.target.closest('[data-doc], [data-docfile]');
     if (!a) return;
     e.preventDefault();
@@ -881,7 +881,7 @@ function wireDocViewer() {
 window.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('.help-btn').forEach(btn => btn.addEventListener('click', () => openHelp(btn.getAttribute('data-help'))));
   ['help-x', 'help-close'].forEach(id => { const b = $(id); if (b) b.addEventListener('click', closeHelp); });
-  { const b = $('link-disclaimer'); if (b) b.addEventListener('click', e => { e.preventDefault(); openHelp('disclaimer'); }); }
+  { const b = $('link-disclaimer'); if (b) b.addEventListener('click', e => { e.preventDefault(); openDocFile(docFile('DISCLAIMER'), 'footDisclaimer'); }); }
   logDiagnosticHeader();
   initLangSwitch();
   initTheme();
