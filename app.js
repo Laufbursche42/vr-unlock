@@ -7,7 +7,7 @@
 
 'use strict';
 
-const BUILD = 'v18';   // logged on load so a tester's log reveals which deployed build is running
+const BUILD = 'v19';   // logged on load so a tester's log reveals which deployed build is running
 
 // --------------------------- hex helpers ---------------------------
 
@@ -904,6 +904,7 @@ window.addEventListener('DOMContentLoaded', () => {
   { const b = $('btn-copy-log'); if (b) b.addEventListener('click', copyLog); }
   { const b = $('btn-save-log'); if (b) b.addEventListener('click', saveLog); }
   { const b = $('btn-clear-log'); if (b) b.addEventListener('click', clearLog); }
+  { const sa = $('showall'); if (sa) sa.addEventListener('change', () => { log('show-all-devices: ' + (sa.checked ? 'on' : 'off')); }); }
 
   setControlsEnabled(false);
   if (!navigator.bluetooth) log('Web Bluetooth not available. On iOS use the Bluefy browser.', 'log-err');
